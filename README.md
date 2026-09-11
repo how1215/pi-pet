@@ -67,20 +67,11 @@ Use `pi remove -l` for a project-local installation, then run `/reload`.
 | Input | Action |
 | --- | --- |
 | `/pet` | Toggle visibility without changing the pet or triggering speech. |
-| `Ctrl+/` | Tell a CS joke and blink while the pet is visible. |
+| `Ctrl+\` | Tell a CS joke and blink while the pet is visible. |
 
 Repeated interactions select a different joke and reset the five-second timer. The shortcut does not reveal a manually hidden pet. Visibility preferences reset on reload.
 
-### Terminal.app keyboard compatibility
-
-Some terminals encode `Ctrl+/`, `Ctrl+_`, and pi's `Ctrl+-` undo shortcut as the same control byte (`0x1f`). This extension deliberately leaves that ambiguous byte alone to preserve undo.
-
-If `Ctrl+/` does nothing or triggers undo, configure your terminal to send an unambiguous sequence:
-
-- modifyOtherKeys: `ESC [27;5;47~`
-- Kitty keyboard protocol: `ESC [47;5u`
-
-In Terminal.app, configure Control + `/` under **Settings > Profiles > Keyboard**, using the **Send Text** action. `ESC` above represents an actual Escape control character followed immediately by `[`, not the letters `ESC`, a space, or the literal text `\x1b`. Configuration details vary by terminal.
+`Ctrl+\` maps to the standard `0x1c` control character and works in Terminal.app without a custom key mapping. If another extension uses the same shortcut, pi may report a duplicate binding; disable one binding or use `/pet` only for visibility control.
 
 ## Meet the pets
 
@@ -101,10 +92,10 @@ Pet IDs remain stable across language updates, so existing saved sessions retain
 session_start
   ├─ restore custom entry, or draw + appendEntry
   └─ zero-height widget owns two non-capturing overlays
-       ├─ pet: 22 columns × 8 rows
+       ├─ pet: 22 columns × 7 rows
        └─ speech: 38 columns, at most 6 rows
 
-Ctrl+/ → choose joke → blink → expire speech
+Ctrl+\ → choose joke → blink → expire speech
 /pet   → toggle visibility and clear speech
 session_shutdown / widget disposal → remove overlays + clear timers
 ```
@@ -141,7 +132,7 @@ npm run check
 
 `check` runs TypeScript type checking and the automated test suite. GitHub Actions runs the checks on Node.js 22 and 24.
 
-Tests cover English content, full pet labels, pixel dimensions, ANSI display widths from 1 to 120 columns, complete joke wrapping, rarity boundaries, non-repeating jokes, state restoration, visibility toggles, timers, cleanup, focus, resizing, and native extension loading.
+Tests cover English content, full pet labels, the absence of panel command hints, pixel dimensions, ANSI display widths from 1 to 120 columns, complete joke wrapping, rarity boundaries, non-repeating jokes, state restoration, visibility toggles, timers, cleanup, focus, resizing, and native extension loading.
 
 Try the extension locally without changing pi's installation settings:
 
@@ -151,7 +142,7 @@ pi -e ./index.ts
 
 ### Manual verification
 
-1. Type an unsent draft, then press `Ctrl+/`. Confirm that the text and cursor remain unchanged.
+1. Type an unsent draft, then press `Ctrl+\`. Confirm that the text and cursor remain unchanged.
 2. Trigger several jokes. The bubble should close five seconds after the last interaction without moving the pet.
 3. Shrink the terminal below 60 columns or 24 rows, then enlarge it. Check for clipped sprites or stale bubbles.
 4. Interact during a streaming response and toggle `/pet`. The model should continue uninterrupted.

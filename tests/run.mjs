@@ -40,7 +40,9 @@ check("English content and complete pet labels at the standard width", () => {
 		assert.match(text, /^[\x20-\x7e]+$/, "names and jokes must use printable English text");
 	}
 	for (const pet of PETS) {
-		assert.ok(renderPet(pet, 22, theme).join("\n").includes(pet.name), "English labels must not be clipped");
+		const rendered = renderPet(pet, 22, theme).join("\n");
+		assert.ok(rendered.includes(pet.name), "English labels must not be clipped");
+		assert.equal(rendered.includes("/pet"), false, "the pet panel must not show command hints");
 	}
 	for (const file of ["../README.md", "../index.ts", "../pets.ts", "../view.ts"]) {
 		assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /\p{Script=Han}/u, file);
@@ -93,13 +95,11 @@ check("jokes never repeat consecutively, including random endpoints", () => {
 	}
 });
 
-check("responsive cutoff and unambiguous Ctrl+slash sequences", () => {
+check("responsive cutoff and Terminal.app Ctrl+backslash input", () => {
 	assert.equal(canShow(59, 24), false);
 	assert.equal(canShow(60, 23), false);
 	assert.equal(canShow(60, 24), true);
-	assert.equal(matchesKey("\x1b[47;5u", "ctrl+/"), true);
-	assert.equal(matchesKey("\x1b[27;5;47~", "ctrl+/"), true);
-	assert.equal(matchesKey("\x1f", "ctrl+/"), false); // Preserve legacy editor undo.
+	assert.equal(matchesKey("\x1c", "ctrl+\\"), true);
 });
 
 const events = new Map();
@@ -146,24 +146,24 @@ try {
 		assert.equal(overlays[1].hidden, true);
 	});
 	check("shortcut displays bubble, resets expiry, blink finishes", () => {
-		shortcuts.get("ctrl+/").handler(ctx);
+		shortcuts.get("ctrl+\\").handler(ctx);
 		assert.equal(overlays[1].hidden, false);
 		const blink = overlays[0].component.render(22);
 		mock.timers.tick(180);
 		assert.notDeepEqual(overlays[0].component.render(22), blink);
 		mock.timers.tick(3820);
-		shortcuts.get("ctrl+/").handler(ctx);
+		shortcuts.get("ctrl+\\").handler(ctx);
 		mock.timers.tick(1000);
 		assert.equal(overlays[1].hidden, false);
 		mock.timers.tick(4000);
 		assert.equal(overlays[1].hidden, true);
 	});
-	shortcuts.get("ctrl+/").handler(ctx);
+	shortcuts.get("ctrl+\\").handler(ctx);
 	await commands.get("pet").handler("", ctx);
 	check("/pet hides pet and speech; shortcut and prompts cannot reopen it", () => {
 		assert.equal(overlays[0].hidden, true);
 		assert.equal(overlays[1].hidden, true);
-		shortcuts.get("ctrl+/").handler(ctx);
+		shortcuts.get("ctrl+\\").handler(ctx);
 		emit("ui_prompt_start"); emit("ui_prompt_end");
 		mock.timers.tick(6000);
 		assert.equal(overlays[0].hidden, true);
@@ -187,7 +187,7 @@ try {
 	});
 	check("shutdown/reload disposes both overlays and pending timers, no reroll", () => {
 		const saved = structuredClone(entries);
-		shortcuts.get("ctrl+/").handler(ctx);
+		shortcuts.get("ctrl+\\").handler(ctx);
 		emit("session_shutdown");
 		assert.ok(overlays.every((overlay) => overlay.removed));
 		mock.timers.tick(10000);
@@ -220,7 +220,7 @@ check("real regular-mode TUI keeps editor focus with passive overlays", () => {
 		assert.equal(editor.focused, true); assert.equal(pet.isFocused(), false);
 		tui.renderNow();
 		const bounds = pet.getBounds();
-		assert.ok(bounds); assert.equal(bounds.width, 22); assert.equal(bounds.height, 8);
+		assert.ok(bounds); assert.equal(bounds.width, 22); assert.equal(bounds.height, PET_HEIGHT);
 		for (const [columns, rows] of [[60, 24], [40, 15], [120, 40], [80, 24]]) {
 			terminal.columns = columns; terminal.rows = rows; tui.renderNow(true);
 			assert.equal(editor.focused, true);
@@ -237,7 +237,7 @@ check("pi's actual TypeScript extension loader registers plugin without errors",
 	assert.deepEqual(loaded.errors, []);
 	assert.equal(loaded.extensions.length, 1);
 	assert.ok(loaded.extensions[0].commands.has("pet"));
-	assert.ok(loaded.extensions[0].shortcuts.has("ctrl+/"));
-	assert.equal(loaded.extensions[0].shortcuts.has("ctrl+\\"), false);
+	assert.ok(loaded.extensions[0].shortcuts.has("ctrl+\\"));
+	assert.equal(loaded.extensions[0].shortcuts.has("ctrl+/"), false);
 });
 console.log(`\n${checks} checks passed.`);

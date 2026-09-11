@@ -98,10 +98,10 @@ export default function sessionPet(pi: ExtensionAPI) {
 	}
 
 	pi.registerCommand("pet", {
-		description: "Toggle your pixel pet; press Ctrl+/ for a CS joke",
+		description: "Toggle your pixel pet; press Ctrl+\\ for a CS joke",
 		handler: async (args, ctx) => {
 			if (args.trim()) {
-				ctx.ui.notify("Usage: /pet to toggle visibility; Ctrl+/ to interact", "info");
+				ctx.ui.notify("Usage: /pet to toggle visibility; Ctrl+\\ to interact", "info");
 				return;
 			}
 			if (ctx.mode !== "tui" || !tui) return;
@@ -113,7 +113,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 			updateVisibility();
 		},
 	});
-	pi.registerShortcut("ctrl+/", { description: "Let your pixel pet tell a CS joke", handler: talk });
+	pi.registerShortcut("ctrl+\\", { description: "Let your pixel pet tell a CS joke", handler: talk });
 	pi.on("ui_prompt_start", () => { prompting = true; updateVisibility(); });
 	pi.on("ui_prompt_end", () => { prompting = false; updateVisibility(); });
 	pi.on("session_shutdown", (_event, ctx) => {

@@ -5,7 +5,7 @@ import type { Pet } from "./pets.ts";
 export const PET_WIDTH = 22;
 export const BUBBLE_WIDTH = 38;
 export const BOTTOM_MARGIN = 4;
-export const PET_HEIGHT = 8;
+export const PET_HEIGHT = 7;
 export const canShow = (width: number, height: number): boolean => width >= 60 && height >= 24;
 
 function fit(text: string, width: number): string {
@@ -44,7 +44,6 @@ export function renderPet(pet: Pet, width: number, theme: Theme, blink = false):
 	return [
 		...sprite(pet, blink).map((line) => centered(line, width)),
 		centered(`\x1b[38;5;${badgeColour}m${pet.rarity}\x1b[0m ${theme.fg("text", pet.name)}`, width),
-		centered(theme.fg("dim", "/pet  Ctrl+/"), width),
 	];
 }
 
