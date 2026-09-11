@@ -78,7 +78,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 	function talk(ctx: ExtensionContext) {
 		if (ctx.mode !== "tui" || !tui || hidden || prompting) return;
 		if (!canShow(tui.terminal.columns, tui.terminal.rows)) {
-			ctx.ui.notify("寵物需要至少 60 欄 × 24 行；放大終端後就會回來。", "info");
+			ctx.ui.notify("Your pet needs at least 60 columns by 24 rows. Resize the terminal to bring it back.", "info");
 			return;
 		}
 		previousJoke = nextJoke(previousJoke);
@@ -98,10 +98,10 @@ export default function sessionPet(pi: ExtensionAPI) {
 	}
 
 	pi.registerCommand("pet", {
-		description: "切換像素寵物顯示／隱藏；Ctrl+/ 說 CS 冷笑話",
+		description: "Toggle your pixel pet; press Ctrl+/ for a CS joke",
 		handler: async (args, ctx) => {
 			if (args.trim()) {
-				ctx.ui.notify("用法：/pet 切換顯示／隱藏；Ctrl+/ 互動", "info");
+				ctx.ui.notify("Usage: /pet to toggle visibility; Ctrl+/ to interact", "info");
 				return;
 			}
 			if (ctx.mode !== "tui" || !tui) return;
@@ -113,7 +113,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 			updateVisibility();
 		},
 	});
-	pi.registerShortcut("ctrl+/", { description: "讓像素寵物說一句 CS 冷笑話", handler: talk });
+	pi.registerShortcut("ctrl+/", { description: "Let your pixel pet tell a CS joke", handler: talk });
 	pi.on("ui_prompt_start", () => { prompting = true; updateVisibility(); });
 	pi.on("ui_prompt_end", () => { prompting = false; updateVisibility(); });
 	pi.on("session_shutdown", (_event, ctx) => {

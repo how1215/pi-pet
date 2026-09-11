@@ -1,5 +1,6 @@
 // npm test; optionally pass an installed pi-coding-agent package directory.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { mock } from "node:test";
@@ -31,6 +32,18 @@ check("four distinct, rectangular 16x12 sprites with valid palette keys", () => 
 			assert.equal(sprite(pet, blink).length, 6);
 			for (const row of sprite(pet, blink)) assert.equal(visibleWidth(row), 16);
 		}
+	}
+});
+
+check("English content and complete pet labels at the standard width", () => {
+	for (const text of [...PETS.map((pet) => pet.name), ...JOKES]) {
+		assert.match(text, /^[\x20-\x7e]+$/, "names and jokes must use printable English text");
+	}
+	for (const pet of PETS) {
+		assert.ok(renderPet(pet, 22, theme).join("\n").includes(pet.name), "English labels must not be clipped");
+	}
+	for (const file of ["../README.md", "../index.ts", "../pets.ts", "../view.ts"]) {
+		assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /\p{Script=Han}/u, file);
 	}
 });
 

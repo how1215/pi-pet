@@ -7,7 +7,7 @@ export interface PetState { version: 1; petId: string }
 // e = eyes, p = cheeks, a = accent. ANSI 256 colours work in Terminal.app.
 export const PETS = [
 	{
-		id: "cache-cat", name: "快取貓", rarity: "N" as Rarity,
+		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity,
 		palette: { o: 60, b: 223, s: 180, h: 230, e: 235, p: 211, a: 153 },
 		pixels: [
 			"...oo......oo...",
@@ -25,7 +25,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "stack-fox", name: "堆疊狐", rarity: "R" as Rarity,
+		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity,
 		palette: { o: 52, b: 209, s: 166, h: 230, e: 235, p: 217, a: 220 },
 		pixels: [
 			"..oo........oo..",
@@ -43,7 +43,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "byte-dragon", name: "位元龍", rarity: "SR" as Rarity,
+		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity,
 		palette: { o: 17, b: 117, s: 68, h: 195, e: 235, p: 183, a: 141 },
 		pixels: [
 			".....a....a.....",
@@ -61,7 +61,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "kernel-phoenix", name: "核心鳳凰", rarity: "SSR" as Rarity,
+		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity,
 		palette: { o: 88, b: 214, s: 202, h: 229, e: 235, p: 203, a: 220 },
 		pixels: [
 			"......a.a.......",
@@ -100,30 +100,30 @@ export function restorePet(entries: readonly { type: string; customType?: string
 }
 
 export const JOKES = [
-	"我沒有失眠，我只是 busy waiting。",
-	"我沒有拖延，我在 lazy evaluation。",
-	"不是忘記你，是 cache miss。",
-	"我的社交協定是 UDP：說了，不保證收到。",
-	"別叫我起床，我是 sleeping thread。",
-	"今天的心情：418 I'm a teapot。",
-	"我想放下過去，但它還有 reference。",
-	"我們不是冷戰，是 distributed deadlock。",
-	"我不是胖，是 space complexity 比較高。",
-	"人生沒有 undo，只有 git reflog。",
-	"你說永遠？請先定義 termination condition。",
-	"我很專情，因為我是 singleton。",
-	"我不是發呆，是在等 interrupt。",
-	"我的安全感，來自每天的 backup。",
-	"你是我的 base case，不然我會無限遞迴。",
-	"我的計畫很完美，只是還沒 compile。",
-	"我把煩惱丟進 queue，現在它 overflow 了。",
-	"我沒有迷路，只是在做 depth-first search。",
-	"今天也努力保持 eventual consistency。",
-	"不是我難相處，是你的 API 沒看文件。",
-	"我沒有偷懶，只是在做 memoization。",
-	"愛情是 race condition：你以為輪到你了。",
-	"我和 bug 的關係：修好了，但沒完全修好。",
-	"先別問人生意義，先問 null check 了沒。",
+	"I don't have insomnia. I'm just busy waiting.",
+	"I'm not procrastinating. This is lazy evaluation.",
+	"I didn't forget you. It was a cache miss.",
+	"I socialize over UDP. Delivery is not guaranteed.",
+	"Do not disturb. I'm a sleeping thread.",
+	"Current mood: 418 I'm a teapot.",
+	"I'd let go of the past, but it still has references.",
+	"We're not giving each other the silent treatment. It's a distributed deadlock.",
+	"I'm not bulky. I just have high space complexity.",
+	"Life has no undo. Luckily, Git has reflog.",
+	"Forever? Please define a termination condition.",
+	"I'm one of a kind. The pattern is called Singleton.",
+	"I'm not zoning out. I'm waiting for an interrupt.",
+	"My love language is a verified backup.",
+	"You're my base case. Without you, I'd recurse forever.",
+	"My plan is flawless. It just hasn't compiled yet.",
+	"I queued my worries. Now the queue is overflowing.",
+	"I'm not lost. I'm doing depth-first search.",
+	"I'll get my life together. Eventually consistent, right?",
+	"I'm not difficult. You just skipped my API docs.",
+	"I'm not cutting corners. I'm using memoization.",
+	"Love is a race condition. You thought it was your turn.",
+	"I fixed the bug. Its relatives have filed a complaint.",
+	"Before asking life's big questions, check for null.",
 ];
 
 export function nextJoke(previous: number, random: () => number = Math.random): number {
