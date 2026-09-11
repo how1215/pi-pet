@@ -1,0 +1,37 @@
+{
+  "name": "pi-session-pet",
+  "version": "0.1.0",
+  "description": "A session-bound pixel companion for pi, with rarity rolls and computer science jokes.",
+  "type": "module",
+  "license": "MIT",
+  "author": "how1215",
+  "repository": { "type": "git", "url": "https://github.com/how1215/pi-pet.git" },
+  "homepage": "https://github.com/how1215/pi-pet#readme",
+  "bugs": { "url": "https://github.com/how1215/pi-pet/issues" },
+  "keywords": ["pi-package", "pi", "terminal", "pixel-art", "virtual-pet", "typescript"],
+  "engines": { "node": ">=22.19.0" },
+  "files": ["index.ts", "pets.ts", "view.ts", "assets/pets.png", "README.md", "LICENSE"],
+  "pi": {
+    "extensions": ["./index.ts"],
+    "image": "https://raw.githubusercontent.com/how1215/pi-pet/main/assets/pets.png"
+  },
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "@earendil-works/pi-tui": { "optional": true }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "@types/node": "22.20.2",
+    "typescript": "5.9.3"
+  }
+}
