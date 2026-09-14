@@ -12,7 +12,7 @@ const { createJiti } = requirePi("jiti");
 const jiti = createJiti(import.meta.url, {
 	alias: { "@earendil-works/pi-tui": requirePi.resolve("@earendil-works/pi-tui") },
 });
-const { PETS, JOKES, drawPet, gainProgress, levelForXp, restorePet, nextJoke, LEGACY_STATE_TYPE, STATE_TYPE } = await jiti.import("../pets.ts");
+const { PETS, JOKES, drawLottery, drawPet, gainAffinity, restorePet, nextJoke, STATE_TYPE } = await jiti.import("../pets.ts");
 const { sprite, animationPixels, ANIMATIONS, frameDelay, renderPet, renderBubble, canShow, PET_HEIGHT, PET_WIDTH } = await jiti.import("../view.ts");
 const { default: extension } = await jiti.import("../index.ts");
 const { visibleWidth, wrapTextWithAnsi, matchesKey, TuiMainScreen } = await import(requirePi.resolve("@earendil-works/pi-tui"));
@@ -20,9 +20,9 @@ const theme = { fg: (_name, text) => `\x1b[37m${text}\x1b[0m` };
 let checks = 0;
 function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
 
-check("eight distinct, padded 16x12 sprites with valid palette keys", () => {
-	assert.equal(PETS.length, 8);
-	assert.equal(new Set(PETS.map((pet) => pet.pixels.join(""))).size, 8);
+check("nine distinct, padded 16x12 sprites with valid palette keys", () => {
+	assert.equal(PETS.length, 9);
+	assert.equal(new Set(PETS.map((pet) => pet.pixels.join(""))).size, 9);
 	for (const pet of PETS) {
 		assert.equal(pet.pixels.length, 12);
 		assert.equal(pet.pixels[0], ".".repeat(16));
@@ -32,7 +32,7 @@ check("eight distinct, padded 16x12 sprites with valid palette keys", () => {
 			assert.equal(row.length, 16, `${pet.id}: ${row}`);
 			for (const pixel of row) assert.ok(pixel === "." || pixel in pet.palette, pixel);
 		}
-		for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
+		for (const animation of ANIMATIONS) {
 			for (const frame of [0, 1]) {
 				assert.equal(sprite(pet, animation, frame).length, 6);
 				for (const row of sprite(pet, animation, frame)) assert.equal(visibleWidth(row), 16);
@@ -48,7 +48,7 @@ check("English content and complete pet labels at the standard width", () => {
 		assert.match(text, /^[\x20-\x7e]+$/, "names and jokes must use printable English text");
 	}
 	for (const pet of PETS) {
-		for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
+		for (const animation of ANIMATIONS) {
 			const rendered = renderPet(pet, 34, theme, animation).join("\n");
 			assert.ok(rendered.includes(`${pet.name} · ${animation}`), "name and animation label must not be clipped");
 			assert.equal(rendered.includes("/pet"), false, "the pet panel must not show command hints");
@@ -61,7 +61,7 @@ check("English content and complete pet labels at the standard width", () => {
 
 check("all sprite states and dialogue fit every width from 1 to 120", () => {
 	for (let width = 1; width <= 120; width++) {
-		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) for (const frame of [0, 1]) {
+		for (const pet of PETS) for (const animation of ANIMATIONS) for (const frame of [0, 1]) {
 			const lines = renderPet(pet, width, theme, animation, frame);
 			assert.equal(lines.length, PET_HEIGHT);
 			for (const line of lines) assert.equal(visibleWidth(line), width);
@@ -79,7 +79,7 @@ check("all sprite states and dialogue fit every width from 1 to 120", () => {
 
 check("active animations change pixel geometry instead of only colours", () => {
 	for (const pet of PETS) {
-		for (const animation of ["idle", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
+		for (const animation of ["idle", "talking", "sleeping", "celebrating", "sad", "eating", "playing", "drawing"]) {
 			assert.notDeepEqual(sprite(pet, animation, 0), sprite(pet, animation, 1), `${pet.id} ${animation}`);
 		}
 		assert.notDeepEqual(sprite(pet, "blinking", 0), sprite(pet, "idle", 0));
@@ -94,7 +94,7 @@ check("every face has distinct high-contrast eyes and a separate mouth", () => {
 		assert.equal(new Set(cells.map((p) => p.join(":"))).size, 12, pet.id);
 		for (const [x, y] of cells) assert.ok(x >= 1 && x <= 14 && y >= 1 && y <= 10);
 		assert.equal(pet.palette.e, 232);
-		assert.ok(pet.palette.h >= 195);
+		assert.notEqual(pet.palette.h, pet.palette.e);
 		const idle = animationPixels(pet, "idle", 0);
 		for (const eye of pet.face.eyes) assert.deepEqual(area(idle, eye), ["qe", "ee"]);
 		for (const state of ["blinking", "sleeping"]) {
@@ -146,64 +146,47 @@ check("sprite cache reuses bounded immutable frames and preserves theme changes"
 	assert.equal(frameDelay("eating"), 260);
 });
 
-check("rarity buckets keep 60/25/12/3 odds and split evenly by species", () => {
-	const counts = Array(8).fill(0);
-	for (let i = 0; i < 10000; i++) for (const speciesRoll of [0, 0.99999]) {
-		const rolls = [i / 10000, speciesRoll];
-		const state = drawPet(() => rolls.shift());
-		counts[PETS.findIndex((p) => p.id === state.petId)]++;
-	}
-	assert.deepEqual(counts, [6000, 2500, 1200, 300, 6000, 2500, 1200, 300]);
-	for (const [roll, index] of [[0, 0], [0.6, 1], [0.85, 2], [0.97, 3], [0.99999, 3]]) {
-		const rolls = [roll, 0];
-		assert.equal(drawPet(() => rolls.shift()).petId, PETS[index].id);
-	}
+check("new sessions start with one of the two N companions", () => {
+	assert.deepEqual(drawPet(() => 0), { version: 4, petId: "cache-cat", affinity: 0 });
+	assert.equal(drawPet(() => 0.499999).petId, "cache-cat");
+	assert.equal(drawPet(() => 0.5).petId, "queue-rabbit");
+	assert.equal(drawPet(() => 0.999999).petId, "queue-rabbit");
 });
 
-check("v2 state restoration validates snapshots and uses the newest valid state", () => {
-	const first = drawPet(() => 0.99);
-	const latest = gainProgress(first, 125, 20).state;
+check("lottery probabilities total 100% with exact species boundaries", () => {
+	assert.ok(Math.abs(PETS.reduce((sum, pet) => sum + pet.probability, 0) - 1) < Number.EPSILON * 4);
+	let boundary = 0;
+	for (let index = 0; index < PETS.length; index++) {
+		assert.equal(drawLottery(() => boundary + 0.0000001).id, PETS[index].id);
+		boundary += PETS[index].probability;
+		if (index + 1 < PETS.length) assert.equal(drawLottery(() => boundary).id, PETS[index + 1].id);
+	}
+	const counts = Array(PETS.length).fill(0);
+	for (let i = 0; i < 100000; i++) counts[PETS.indexOf(drawLottery(() => i / 100000))]++;
+	assert.deepEqual(counts, PETS.map((pet) => pet.probability * 100000));
+	assert.equal(PETS.find((pet) => pet.id === "bug").probability, 0.003);
+});
+
+check("v4 restoration validates state, uses the latest valid snapshot, and ignores old versions", () => {
+	const first = { version: 4, petId: "cache-cat", affinity: 10 };
+	const latest = { version: 4, petId: "bug", affinity: 55 };
 	const entry = { type: "custom", customType: STATE_TYPE, data: first };
-	assert.deepEqual(restorePet([{ ...entry, data: null }, entry]), { state: first, migrated: false });
-	assert.equal(restorePet([{ ...entry, data: { ...first, level: 99 } }]), undefined);
-	assert.equal(restorePet([{ ...entry, customType: "other" }]), undefined);
-	assert.deepEqual(restorePet([entry, { ...entry, data: latest }]), { state: latest, migrated: false });
+	assert.deepEqual(restorePet([{ ...entry, data: null }, entry, { ...entry, data: latest }]), latest);
+	assert.equal(restorePet([{ ...entry, data: { ...first, affinity: 101 } }]), undefined);
+	assert.equal(restorePet([{ ...entry, customType: "session-pet:v2", data: { version: 2, petId: "kernel-phoenix", affinity: 90 } }]), undefined);
+	assert.equal(restorePet([{ ...entry, customType: "session-pet:v1", data: { version: 1, petId: "stack-fox" } }]), undefined);
 });
 
-check("v1 state migrates without losing its selected pet", () => {
-	const legacy = { version: 1, petId: "kernel-phoenix" };
-	const restored = restorePet([{ type: "custom", customType: LEGACY_STATE_TYPE, data: legacy }]);
-	assert.equal(restored.migrated, true);
-	assert.deepEqual(restored.state, {
-		version: 2, petId: "kernel-phoenix", xp: 0, level: 1, affinity: 0,
-		unlockedPetIds: ["cache-cat", "queue-rabbit", "kernel-phoenix"],
-	});
-});
-
-check("old v2 snapshots gain eligible species without losing XP or rare unlocks", () => {
-	const old = { version: 2, petId: "kernel-phoenix", xp: 120, level: 2, affinity: 70,
-		unlockedPetIds: ["cache-cat", "stack-fox", "kernel-phoenix"] };
-	const entry = { type: "custom", customType: STATE_TYPE, data: old };
-	const restored = restorePet([entry]);
-	assert.equal(restored.migrated, true);
-	assert.deepEqual(restored.state, { ...old, unlockedPetIds: [...old.unlockedPetIds, "queue-rabbit", "regex-raccoon"] });
-	assert.equal(restorePet([entry, { ...entry, data: restored.state }]).migrated, false);
-	assert.deepEqual(old.unlockedPetIds, ["cache-cat", "stack-fox", "kernel-phoenix"]);
-});
-
-check("progression calculates levels, caps affinity, and unlocks by level", () => {
-	const initial = drawPet(() => 0);
-	const result = gainProgress(initial, 450, 150);
-	assert.equal(levelForXp(result.state.xp), 5);
-	assert.equal(result.state.level, 5);
-	assert.equal(result.state.affinity, 100);
-	assert.deepEqual(new Set(result.state.unlockedPetIds), new Set(PETS.map((pet) => pet.id)));
-	assert.deepEqual(result.unlocked, PETS.filter((pet) => pet.unlockLevel > 1).map((pet) => pet.id));
+check("feeding and playing only raise affinity and cap it at 100", () => {
+	const initial = { version: 4, petId: "cache-cat", affinity: 0 };
+	assert.deepEqual(gainAffinity(initial, 10), { ...initial, affinity: 10 });
+	assert.deepEqual(gainAffinity({ ...initial, affinity: 95 }, 15), { ...initial, affinity: 100 });
+	assert.deepEqual(initial, { version: 4, petId: "cache-cat", affinity: 0 });
 });
 
 check("dialogue never repeats consecutively in any pet's pool", () => {
-	assert.equal(JOKES.length, 32);
-	assert.equal(new Set(JOKES).size, 32);
+	assert.equal(JOKES.length, 36);
+	assert.equal(new Set(JOKES).size, 36);
 	for (const lines of [JOKES, ...PETS.map((pet) => pet.lines)]) {
 		for (let previous = -1; previous < lines.length; previous++) {
 			for (const roll of [0, 0.25, 0.5, 0.999999]) {
@@ -229,6 +212,7 @@ let entries = [];
 let owner;
 const notifications = [];
 const overlays = [];
+const originalRandom = Math.random;
 let renderRequests = 0;
 const renderer = {
 	terminal: { columns: 80, rows: 24 },
@@ -277,9 +261,9 @@ try {
 		assert.equal(renderRequests, before + 1);
 		assert.notDeepEqual(overlays[0].component.render(PET_WIDTH), pose);
 	});
-	check("shortcut runs blinking, talking, and idle animation states", () => {
+	check("/pet talk runs blinking, talking, and idle animation states", () => {
 		const idle = overlays[0].component.render(22);
-		shortcuts.get("ctrl+\\").handler(ctx);
+		commands.get("pet").handler("talk", ctx);
 		assert.equal(overlays[1].hidden, false);
 		const blinking = overlays[0].component.render(22);
 		assert.notDeepEqual(blinking, idle);
@@ -287,19 +271,19 @@ try {
 		const talking = overlays[0].component.render(22);
 		assert.notDeepEqual(talking, blinking);
 		mock.timers.tick(3820);
-		shortcuts.get("ctrl+\\").handler(ctx);
+		commands.get("pet").handler("talk", ctx);
 		mock.timers.tick(1000);
 		assert.equal(overlays[1].hidden, false);
 		mock.timers.tick(4000);
 		assert.equal(overlays[1].hidden, true);
 		assert.ok(overlays[0].component.render(34).join("\n").includes("· idle"));
 	});
-	shortcuts.get("ctrl+\\").handler(ctx);
+	await commands.get("pet").handler("talk", ctx);
 	await commands.get("pet").handler("", ctx);
-	check("/pet hides pet and speech; shortcut and prompts cannot reopen it", () => {
+	check("/pet hides pet and speech; talk and prompts cannot reopen it", () => {
 		assert.equal(overlays[0].hidden, true);
 		assert.equal(overlays[1].hidden, true);
-		shortcuts.get("ctrl+\\").handler(ctx);
+		commands.get("pet").handler("talk", ctx);
 		emit("ui_prompt_start"); emit("ui_prompt_end");
 		const before = renderRequests;
 		mock.timers.tick(6000);
@@ -323,42 +307,75 @@ try {
 		assert.equal(overlays[1].hidden, false);
 	});
 	await commands.get("pet").handler("feed", ctx);
-	check("/pet feed persists XP and affinity with an eating reaction", () => {
-		assert.deepEqual(entries.at(-1).data, { ...initialState, xp: 15, affinity: 10 });
+	check("/pet feed persists affinity only with an eating reaction", () => {
+		assert.deepEqual(entries.at(-1).data, { ...initialState, affinity: 10 });
 		assert.notDeepEqual(overlays[0].component.render(22), renderPet(initialPet, 22, theme, "idle"));
 	});
 	await commands.get("pet").handler("play", ctx);
-	check("/pet play adds its progression snapshot", () => {
-		assert.equal(entries.at(-1).data.xp, 40);
-		assert.equal(entries.at(-1).data.affinity, 25);
+	check("/pet play adds affinity without XP or level fields", () => {
+		assert.deepEqual(entries.at(-1).data, { ...initialState, affinity: 25 });
+		assert.equal("xp" in entries.at(-1).data, false);
+		assert.equal("level" in entries.at(-1).data, false);
 	});
 	await commands.get("pet").handler("status", ctx);
-	check("/pet status reports progression, animation, and visibility", () => {
-		assert.equal(notifications.at(-1).message, `${initialPet.name} | Rarity: ${initialPet.rarity} | Level: 1 | XP: 40 (40/100) | Affinity: 25/100 | Animation: playing | Visibility: visible`);
-		assert.deepEqual(commands.get("pet").getArgumentCompletions("f"), [{ value: "feed", label: "feed" }]);
+	check("/pet status reports rarity, affinity, animation, and visibility", () => {
+		assert.equal(notifications.at(-1).message, `${initialPet.name} | Rarity: ${initialPet.rarity} | Affinity: 25/100 | Animation: playing | Visibility: visible`);
+		assert.deepEqual(commands.get("pet").getArgumentCompletions("d"), [{ value: "draw", label: "draw" }]);
+		assert.equal(commands.get("pet").getArgumentCompletions("select"), null);
 	});
 	await commands.get("pet").handler("list", ctx);
-	check("/pet list shows the complete collection and lock state", () => {
-		for (const pet of PETS) assert.match(notifications.at(-1).message, new RegExp(`${pet.id} \\| ${pet.name}`));
+	check("/pet list is an encyclopedia and conceals inactive Bug", () => {
+		for (const pet of PETS.filter((pet) => !pet.hidden)) assert.match(notifications.at(-1).message, new RegExp(`${pet.id} \\| ${pet.name}`));
+		assert.ok(notifications.at(-1).message.includes("??? | Hidden | SSR | 0.3%"));
+		assert.equal(notifications.at(-1).message.includes("Bug"), false);
+		assert.equal(notifications.at(-1).message.includes("owned"), false);
 	});
-	const lockedPet = PETS.find((pet) => !entries.at(-1).data.unlockedPetIds.includes(pet.id));
-	await commands.get("pet").handler(`select ${lockedPet.id}`, ctx);
-	check("/pet select rejects locked pets", () => {
-		assert.equal(entries.at(-1).data.petId, initialPet.id);
-		assert.equal(notifications.at(-1).level, "warning");
+	const beforeDrawEntries = entries.length;
+	Math.random = () => 0.985;
+	shortcuts.get("ctrl+\\").handler(ctx);
+	await commands.get("pet").handler("draw", ctx);
+	check("Ctrl+backslash starts drawing and blocks overlapping draws", () => {
+		assert.equal(entries.length, beforeDrawEntries);
+		assert.ok(overlays[0].component.render(PET_WIDTH).join("\n").includes("· drawing"));
+		assert.equal(notifications.at(-1).message, "A draw is already in progress.");
+		mock.timers.tick(999);
+		assert.equal(entries.length, beforeDrawEntries);
 	});
-	for (let index = 0; index < 15; index++) await commands.get("pet").handler("play", ctx);
-	await commands.get("pet").handler("select kernel-phoenix", ctx);
-	check("training unlocks pets and /pet select switches the rendered companion", () => {
-		assert.equal(entries.at(-1).data.level, 5);
-		assert.deepEqual(new Set(entries.at(-1).data.unlockedPetIds), new Set(PETS.map((pet) => pet.id)));
-		assert.equal(entries.at(-1).data.petId, "kernel-phoenix");
-		assert.ok(overlays[0].component.render(22).join("\n").includes("Kernel Phoenix"));
-		assert.deepEqual(commands.get("pet").getArgumentCompletions("select k"), [{ value: "select kernel-phoenix", label: "select kernel-phoenix" }]);
+	mock.timers.tick(1);
+	check("the 0.3% hidden draw immediately activates Bug and resets affinity", () => {
+		assert.deepEqual(entries.at(-1).data, { version: 4, petId: "bug", affinity: 0 });
+		assert.ok(overlays[0].component.render(PET_WIDTH).join("\n").includes("Bug · celebrating"));
+		assert.equal(entries.length, beforeDrawEntries + 1);
+	});
+	await commands.get("pet").handler("list", ctx);
+	check("/pet list reveals Bug details only while Bug is active", () => {
+		assert.ok(notifications.at(-1).message.includes("bug | Bug | Hidden SSR | 0.3% | active"));
+		assert.equal(notifications.at(-1).message.includes("??? | Hidden"), false);
+	});
+	Math.random = () => 0.1;
+	await commands.get("pet").handler("draw", ctx);
+	mock.timers.tick(1000);
+	await commands.get("pet").handler("list", ctx);
+	check("redrawing replaces Bug without retaining ownership or discovery", () => {
+		assert.deepEqual(entries.at(-1).data, { version: 4, petId: "cache-cat", affinity: 0 });
+		assert.ok(notifications.at(-1).message.includes("??? | Hidden | SSR | 0.3%"));
+		assert.equal(notifications.at(-1).message.includes("Bug"), false);
+	});
+	await commands.get("pet").handler("draw", ctx);
+	mock.timers.tick(1000);
+	check("drawing the same species is valid and persists a fresh current-pet snapshot", () => {
+		assert.deepEqual(entries.at(-1).data, { version: 4, petId: "cache-cat", affinity: 0 });
+		const bubble = overlays[1].component.render(38).join(" ").replace(/\x1b\[[0-9;]*m/g, "");
+		assert.ok(bubble.includes("Cache Cat chose to stay with you!"));
+	});
+	await commands.get("pet").handler("select stack-fox", ctx);
+	check("the removed select subcommand only displays current usage", () => {
+		assert.equal(entries.at(-1).data.petId, "cache-cat");
+		assert.match(notifications.at(-1).message, /^Usage: \/pet, \/pet draw/);
 	});
 	events.get("tool_execution_end")({ isError: false }, ctx);
 	check("successful tools trigger the celebrating animation", () => {
-		assert.notDeepEqual(overlays[0].component.render(22), renderPet(PETS[3], 22, theme, "idle"));
+		assert.notDeepEqual(overlays[0].component.render(22), renderPet(PETS[0], 22, theme, "idle"));
 	});
 	events.get("tool_execution_end")({ isError: true }, ctx);
 	await commands.get("pet").handler("status", ctx);
@@ -399,9 +416,10 @@ try {
 		mock.timers.tick(1200);
 		assert.equal(renderRequests, before + 1);
 	});
-	check("shutdown/reload disposes both overlays and pending timers, no reroll", () => {
+	check("shutdown/reload cancels a pending draw and keeps the last completed pet", () => {
 		const saved = structuredClone(entries);
-		shortcuts.get("ctrl+\\").handler(ctx);
+		Math.random = () => 0.985;
+		commands.get("pet").handler("draw", ctx);
 		emit("session_shutdown");
 		assert.ok(overlays.every((overlay) => overlay.removed));
 		const before = renderRequests;
@@ -410,23 +428,9 @@ try {
 		emit("session_start");
 		assert.deepEqual(entries, saved);
 	});
-	for (const pet of PETS.slice(4)) {
-		await commands.get("pet").handler(`select ${pet.id}`, ctx);
-		await commands.get("pet").handler("talk", ctx);
-		check(`${pet.name} can be selected and speaks only its own dialogue`, () => {
-			assert.equal(entries.at(-1).data.petId, pet.id);
-			const bubble = overlays.at(-1).component;
-			const lines = bubble.render(38);
-			const text = lines.join(" ").replace(/\x1b\[[0-9;]*m/g, "").replace(/[╭─╮│╰┬╯]/g, " ").replace(/\s+/g, " ");
-			assert.ok(pet.lines.some((line) => text.includes(line)));
-			assert.equal(bubble.render(38), lines);
-			bubble.invalidate();
-			assert.notEqual(bubble.render(38), lines);
-		});
-	}
 	check("pending speech expiry cannot redraw while a prompt or small terminal hides it", () => {
 		for (const reason of ["prompt", "resize"]) {
-			shortcuts.get("ctrl+\\").handler(ctx);
+			commands.get("pet").handler("talk", ctx);
 			if (reason === "prompt") emit("ui_prompt_start");
 			else { renderer.terminal.rows = 15; owner.render(80); }
 			const before = renderRequests;
@@ -438,16 +442,16 @@ try {
 			else { renderer.terminal.rows = 24; owner.render(80); }
 		}
 	});
-	check("legacy unlock repair is persisted once across repeated startup", () => {
+	check("old state entries are ignored and replaced by one fresh N starter", () => {
 		emit("session_shutdown");
-		entries = [{ type: "custom", customType: STATE_TYPE, data: {
-			version: 2, petId: "stack-fox", xp: 100, level: 2, affinity: 40,
-			unlockedPetIds: ["cache-cat", "stack-fox"],
+		entries = [{ type: "custom", customType: "session-pet:v2", data: {
+			version: 2, petId: "kernel-phoenix", xp: 400, level: 5, affinity: 90,
+			unlockedPetIds: PETS.map((pet) => pet.id),
 		} }];
+		Math.random = () => 0;
 		emit("session_start");
 		assert.equal(entries.length, 2);
-		assert.ok(entries[1].data.unlockedPetIds.includes("regex-raccoon"));
-		assert.equal(entries[1].data.xp, 100);
+		assert.deepEqual(entries[1].data, { version: 4, petId: "cache-cat", affinity: 0 });
 		emit("session_start");
 		assert.equal(entries.length, 2);
 		const before = renderRequests;
@@ -466,7 +470,10 @@ try {
 			assert.equal(renderRequests, before);
 		}
 	});
-} finally { mock.timers.reset(); }
+} finally {
+	Math.random = originalRandom;
+	mock.timers.reset();
+}
 
 check("real regular-mode TUI keeps editor focus with passive overlays", () => {
 	const terminal = {

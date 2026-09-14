@@ -2,6 +2,31 @@
 
 All notable changes to pi-pet are documented here.
 
+## 2.0.0
+
+### Breaking changes
+
+- Remove XP, levels, unlocks, permanent collection state, duplicate inventory, and `/pet select`.
+- Ignore all earlier session-pet state formats. The first v2.0 load in an existing session creates a fresh N starter and writes `session-pet:v4` state.
+- Feeding now grants 10 affinity and playing grants 15 affinity. Drawing a replacement resets affinity to zero.
+
+### Added
+
+- `/pet draw`: play a one-second drawing animation, then immediately replace the current companion using explicit weighted odds.
+- `Ctrl+\\` now triggers the same quick draw as `/pet draw`; talking remains available through `/pet talk`.
+- Hidden SSR Bug, with a 0.3% draw chance, glitch artwork, all nine animation states, and four dedicated lines.
+- `drawing` animation with a 140 ms frame delay, body glitches, and moving edge pixels.
+- Encyclopedia probabilities in `/pet list`. Inactive Bug appears only as `??? | Hidden | SSR | 0.3%`; its details are visible while active.
+- Guards against overlapping draws and cleanup for pending draw timers.
+
+### Changed
+
+- New sessions start evenly between Cache Cat and Queue Rabbit instead of drawing from all rarities.
+- The lottery has exact species odds: N 30% each, R 12.5% each, SR 6% each, Kernel Phoenix and Quantum Owl 1.35% each, and Bug 0.3%.
+- Drawing the same species is valid and saves a fresh current-pet snapshot; no pet is permanently owned or discovered.
+- State is reduced to `{ version: 4, petId, affinity }` and remains local to the current session.
+- Preview assets now contain nine pets and nine animation states. The automated suite contains 41 checks.
+
 ## 1.4.0
 
 ### Added

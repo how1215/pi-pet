@@ -17,8 +17,8 @@ function centered(text: string, width: number): string {
 	return fit(" ".repeat(padding) + text, width);
 }
 
-export const ANIMATIONS: readonly AnimationState[] = ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"];
-export const frameDelay = (animation: AnimationState): number => animation === "idle" ? 900 : animation === "sleeping" ? 1200 : 260;
+export const ANIMATIONS: readonly AnimationState[] = ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing", "drawing"];
+export const frameDelay = (animation: AnimationState): number => animation === "idle" ? 900 : animation === "sleeping" ? 1200 : animation === "drawing" ? 140 : 260;
 
 // Exported for visual previews and tests of actual facial geometry.
 export function animationPixels(pet: Pet, animation: AnimationState, frame: number): string[][] {
@@ -63,10 +63,17 @@ export function animationPixels(pet: Pet, animation: AnimationState, frame: numb
 	if (animation === "sleeping") {
 		patch([13, 1 + phase], ["aa", ".a", "aa"]);
 	}
+	if (animation === "drawing") {
+		const row = 2 + phase * 6;
+		pixels[row][0] = pixels[row][15] = "a";
+		pixels[row + 1][phase ? 2 : 13] = "q";
+		const segment = pixels[9].slice(3, 13);
+		for (let x = 3; x < 13; x++) pixels[9][x] = segment[(x - 3 + (phase ? 2 : 8)) % segment.length];
+	}
 	return pixels;
 }
 
-// At most 8 states x 2 frames per pet. No theme-dependent colours in this cache.
+// At most 9 states x 2 frames per pet. No theme-dependent colours in this cache.
 const spriteCache = new WeakMap<Pet, Map<string, readonly string[]>>();
 
 // Two vertical pixels per cell. Explicit colour resets prevent colour leakage

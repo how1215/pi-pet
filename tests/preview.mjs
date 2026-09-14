@@ -51,6 +51,6 @@ function preview(file, panels, columns, scale) {
 		chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0)),
 	]));
 }
-preview("../assets/pets.png", PETS.map((pet) => ({ pet, animation: "idle", frame: 0 })), 4, 8);
-preview("../assets/animations.png", ANIMATIONS.flatMap((animation) => [0, 1].flatMap((frame) => PETS.map((pet) => ({ pet, animation, frame })))), 8, 4);
+preview("../assets/pets.png", PETS.map((pet) => ({ pet, animation: "idle", frame: 0 })), 5, 8);
+preview("../assets/animations.png", ANIMATIONS.flatMap((animation) => [0, 1].flatMap((frame) => PETS.map((pet) => ({ pet, animation, frame })))), 9, 4);
 console.log("Updated assets/pets.png and assets/animations.png");

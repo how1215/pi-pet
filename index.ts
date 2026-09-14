@@ -1,11 +1,12 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
-import { drawPet, gainProgress, nextJoke, PETS, restorePet, STATE_TYPE, XP_PER_LEVEL } from "./pets.ts";
+import { drawLottery, drawPet, gainAffinity, nextJoke, PETS, restorePet, STATE_TYPE } from "./pets.ts";
 import type { AnimationState, Pet, PetState } from "./pets.ts";
 import { BOTTOM_MARGIN, BUBBLE_WIDTH, canShow, frameDelay, PET_HEIGHT, PET_WIDTH, renderBubble, renderPet } from "./view.ts";
 
 const WIDGET = "session-pet:overlay-owner";
 const SLEEP_DELAY = 60_000;
+const DRAW_DELAY = 1000;
 
 export default function sessionPet(pi: ExtensionAPI) {
 	let tui: TUI | undefined;
@@ -14,6 +15,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 	let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 	let animationTimer: ReturnType<typeof setTimeout> | undefined;
 	let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+	let drawTimer: ReturnType<typeof setTimeout> | undefined;
 	let frameTimer: ReturnType<typeof setTimeout> | undefined;
 	let petHidden: boolean | undefined;
 	let bubbleHidden: boolean | undefined;
@@ -23,6 +25,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 	let animationFrame = 0;
 	let speech = "";
 	let previousLine = -1;
+	let drawing = false;
 	let activePet: Pet | undefined;
 	let state: PetState | undefined;
 
@@ -89,8 +92,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 	}
 
 	function persistState() {
-		if (!state) return;
-		pi.appendEntry(STATE_TYPE, { ...state, unlockedPetIds: [...state.unlockedPetIds] });
+		if (state) pi.appendEntry(STATE_TYPE, { ...state });
 	}
 
 	function react(text: string, nextAnimation: AnimationState, duration = 3000) {
@@ -110,7 +112,9 @@ export default function sessionPet(pi: ExtensionAPI) {
 	function cleanup() {
 		clearActivityTimers();
 		clearTimeout(frameTimer);
-		frameTimer = undefined;
+		clearTimeout(drawTimer);
+		frameTimer = drawTimer = undefined;
+		drawing = false;
 		petHidden = bubbleHidden = undefined;
 		petHandle?.hide();
 		bubbleHandle?.hide();
@@ -129,8 +133,8 @@ export default function sessionPet(pi: ExtensionAPI) {
 		speech = "";
 		previousLine = -1;
 		const restored = restorePet(ctx.sessionManager.getEntries());
-		state = restored?.state ?? drawPet();
-		if (!restored || restored.migrated) persistState();
+		state = restored ?? drawPet();
+		if (!restored) persistState();
 		activePet = PETS.find((candidate) => candidate.id === state!.petId)!;
 
 		// A zero-height widget provides the supported TUI factory + disposal hook.
@@ -171,7 +175,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 	});
 
 	function talk(ctx: ExtensionContext) {
-		if (ctx.mode !== "tui" || !tui || !activePet || hidden || prompting) return;
+		if (ctx.mode !== "tui" || !tui || !activePet || hidden || prompting || drawing) return;
 		if (!canShow(tui.terminal.columns, tui.terminal.rows)) {
 			ctx.ui.notify("Your pet needs at least 60 columns by 24 rows. Resize the terminal to bring it back.", "info");
 			return;
@@ -195,81 +199,88 @@ export default function sessionPet(pi: ExtensionAPI) {
 
 	function train(ctx: ExtensionContext, kind: "feed" | "play") {
 		if (ctx.mode !== "tui" || !state || !activePet) return;
-		const gains = kind === "feed" ? { xp: 15, affinity: 10 } : { xp: 25, affinity: 15 };
-		const result = gainProgress(state, gains.xp, gains.affinity);
-		state = result.state;
+		if (drawing) {
+			ctx.ui.notify("Wait for the current draw to finish.", "info");
+			return;
+		}
+		const amount = kind === "feed" ? 10 : 15;
+		state = gainAffinity(state, amount);
 		persistState();
-		const unlocked = result.unlocked.map((id) => PETS.find((pet) => pet.id === id)!.name);
-		const suffix = unlocked.length ? ` Unlocked: ${unlocked.join(", ")}!` : "";
-		react(
-			kind === "feed" ? `Crunch! +${gains.xp} XP, +${gains.affinity} affinity.${suffix}` : `That was fun! +${gains.xp} XP, +${gains.affinity} affinity.${suffix}`,
-			kind === "feed" ? "eating" : "playing",
-		);
+		react(kind === "feed" ? `Crunch! +${amount} affinity.` : `That was fun! +${amount} affinity.`, kind === "feed" ? "eating" : "playing");
+	}
+
+	function draw(ctx: ExtensionContext) {
+		if (ctx.mode !== "tui" || !tui || !state || !activePet) return;
+		if (drawing) {
+			ctx.ui.notify("A draw is already in progress.", "info");
+			return;
+		}
+		drawing = true;
+		clearActivityTimers();
+		speech = "Drawing...";
+		setAnimation("drawing");
+		updateVisibility();
+		drawTimer = setTimeout(() => {
+			drawTimer = undefined;
+			const previousId = activePet!.id;
+			activePet = drawLottery();
+			state = { version: 4, petId: activePet.id, affinity: 0 };
+			previousLine = -1;
+			drawing = false;
+			persistState();
+			const rarity = activePet.hidden ? "Hidden SSR" : activePet.rarity;
+			const message = activePet.id === previousId
+				? `${activePet.name} chose to stay with you!`
+				: `${rarity} draw: ${activePet.name} is now your companion!`;
+			react(message, "celebrating", 4000);
+		}, DRAW_DELAY);
 	}
 
 	pi.registerCommand("pet", {
-		description: "Manage, train, or inspect your pixel pet",
+		description: "Draw, train, or inspect your pixel pet",
 		getArgumentCompletions: (prefix) => {
-			const values = prefix.startsWith("select ")
-				? PETS.map((pet) => `select ${pet.id}`)
-				: ["talk", "status", "feed", "play", "list", "select"];
-			const items = values.filter((value) => value.startsWith(prefix));
+			const items = ["draw", "talk", "status", "feed", "play", "list"].filter((value) => value.startsWith(prefix));
 			return items.length ? items.map((value) => ({ value, label: value })) : null;
 		},
 		handler: async (args, ctx) => {
-			const [action = "", value, ...extra] = args.trim().toLowerCase().split(/\s+/);
+			const [action = "", value] = args.trim().toLowerCase().split(/\s+/);
+			if (action === "draw" && !value) return draw(ctx);
 			if (action === "talk" && !value) return talk(ctx);
 			if (action === "feed" && !value) return train(ctx, "feed");
 			if (action === "play" && !value) return train(ctx, "play");
 			if (action === "status" && !value) {
 				if (ctx.mode !== "tui" || !state || !activePet) return;
-				ctx.ui.notify(`${activePet.name} | Rarity: ${activePet.rarity} | Level: ${state.level} | XP: ${state.xp} (${state.xp % XP_PER_LEVEL}/${XP_PER_LEVEL}) | Affinity: ${state.affinity}/100 | Animation: ${animation} | Visibility: ${hidden ? "hidden" : "visible"}`, "info");
+				ctx.ui.notify(`${activePet.name} | Rarity: ${activePet.hidden ? "Hidden SSR" : activePet.rarity} | Affinity: ${state.affinity}/100 | Animation: ${animation} | Visibility: ${hidden ? "hidden" : "visible"}`, "info");
 				return;
 			}
 			if (action === "list" && !value) {
 				if (ctx.mode !== "tui" || !state) return;
 				const lines = PETS.map((pet) => {
-					const marker = pet.id === state!.petId ? "active" : state!.unlockedPetIds.includes(pet.id) ? "unlocked" : `locked: level ${pet.unlockLevel}`;
-					return `${pet.id} | ${pet.name} | ${pet.rarity} | ${marker}`;
+					const active = pet.id === state!.petId;
+					if (pet.hidden && !active) return "??? | Hidden | SSR | 0.3%";
+					const chance = `${pet.probability * 100}%`;
+					return `${pet.id} | ${pet.name} | ${pet.hidden ? "Hidden SSR" : pet.rarity} | ${chance}${active ? " | active" : ""}`;
 				});
 				ctx.ui.notify(lines.join("\n"), "info");
 				return;
 			}
-			if (action === "select" && value && extra.length === 0) {
-				if (ctx.mode !== "tui" || !state) return;
-				const selected = PETS.find((pet) => pet.id === value);
-				if (!selected) {
-					ctx.ui.notify(`Unknown pet: ${value}. Use /pet list.`, "warning");
-					return;
-				}
-				if (!state.unlockedPetIds.includes(selected.id)) {
-					ctx.ui.notify(`${selected.name} unlocks at level ${selected.unlockLevel}.`, "warning");
-					return;
-				}
-				state = { ...state, petId: selected.id };
-				activePet = selected;
-				previousLine = -1;
-				persistState();
-				react(`${selected.name} is now your active companion!`, "celebrating");
-				return;
-			}
 			if (action) {
-				ctx.ui.notify("Usage: /pet, /pet talk, /pet status, /pet feed, /pet play, /pet list, or /pet select <pet-id>", "info");
+				ctx.ui.notify("Usage: /pet, /pet draw, /pet talk, /pet status, /pet feed, /pet play, or /pet list", "info");
 				return;
 			}
 			if (ctx.mode !== "tui" || !tui) return;
 			hidden = !hidden;
 			speech = "";
-			setAnimation("idle");
+			setAnimation(drawing ? "drawing" : "idle");
 			clearActivityTimers();
 			updateVisibility();
 			scheduleSleep();
 		},
 	});
 
-	pi.registerShortcut("ctrl+\\", { description: "Let your pixel pet talk", handler: talk });
+	pi.registerShortcut("ctrl+\\", { description: "Draw a new pixel pet", handler: draw });
 	pi.on("tool_execution_end", (event, ctx) => {
-		if (ctx.mode !== "tui" || hidden || prompting || !activePet) return;
+		if (ctx.mode !== "tui" || hidden || prompting || !activePet || drawing) return;
 		react(event.isError ? "That tool stumbled. We'll debug it together." : "Tool complete! Nice work.", event.isError ? "sad" : "celebrating");
 	});
 	pi.on("ui_prompt_start", () => { prompting = true; updateVisibility(); });

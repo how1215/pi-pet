@@ -1,20 +1,9 @@
 import { ARTWORK } from "./artwork.ts";
 
-export const STATE_TYPE = "session-pet:v2";
-export const LEGACY_STATE_TYPE = "session-pet:v1";
+export const STATE_TYPE = "session-pet:v4";
 export type Rarity = "N" | "R" | "SR" | "SSR";
-export type AnimationState = "idle" | "blinking" | "talking" | "sleeping" | "celebrating" | "sad" | "eating" | "playing";
-export interface LegacyPetState { version: 1; petId: string }
-export interface PetState {
-	version: 2;
-	petId: string;
-	xp: number;
-	level: number;
-	affinity: number;
-	unlockedPetIds: string[];
-}
-
-export const XP_PER_LEVEL = 100;
+export type AnimationState = "idle" | "blinking" | "talking" | "sleeping" | "celebrating" | "sad" | "eating" | "playing" | "drawing";
+export interface PetState { version: 4; petId: string; affinity: number }
 export const MAX_AFFINITY = 100;
 
 // 16 x 12 pixels, packed into 16 x 6 terminal cells by the renderer.
@@ -23,7 +12,7 @@ export const MAX_AFFINITY = 100;
 // Facial contrast uses near-black eyes against a light face in every palette.
 export const PETS = [
 	{
-		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity, unlockLevel: 1,
+		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity, probability: 0.30, hidden: false,
 		palette: { o: 60, b: 223, s: 180, h: 230, e: 232, q: 231, m: 52, p: 211, a: 153, i: 230 },
 		lines: [
 			"That idea is cached. Let's make it fast.",
@@ -34,7 +23,7 @@ export const PETS = [
 		...ARTWORK["cache-cat"],
 	},
 	{
-		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity, unlockLevel: 2,
+		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity, probability: 0.125, hidden: false,
 		palette: { o: 52, b: 209, s: 166, h: 230, e: 232, q: 231, m: 52, p: 217, a: 220, i: 230 },
 		lines: [
 			"I followed the stack trace all the way home.",
@@ -45,7 +34,7 @@ export const PETS = [
 		...ARTWORK["stack-fox"],
 	},
 	{
-		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity, unlockLevel: 3,
+		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity, probability: 0.06, hidden: false,
 		palette: { o: 17, b: 117, s: 68, h: 195, e: 232, q: 231, m: 17, p: 183, a: 141, i: 195 },
 		lines: [
 			"I breathe bits, not fire. Usually.",
@@ -56,7 +45,7 @@ export const PETS = [
 		...ARTWORK["byte-dragon"],
 	},
 	{
-		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity, unlockLevel: 5,
+		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity, probability: 0.0135, hidden: false,
 		palette: { o: 88, b: 214, s: 202, h: 229, e: 232, q: 231, m: 88, p: 203, a: 220, i: 229 },
 		lines: [
 			"From every kernel panic, I rise again.",
@@ -67,7 +56,7 @@ export const PETS = [
 		...ARTWORK["kernel-phoenix"],
 	},
 	{
-		id: "queue-rabbit", name: "Queue Rabbit", rarity: "N" as Rarity, unlockLevel: 1,
+		id: "queue-rabbit", name: "Queue Rabbit", rarity: "N" as Rarity, probability: 0.30, hidden: false,
 		palette: { o: 60, b: 189, s: 146, h: 255, e: 232, q: 231, m: 60, p: 211, a: 213, i: 255 },
 		lines: [
 			"First in, first hop. That's my queue policy.",
@@ -78,7 +67,7 @@ export const PETS = [
 		...ARTWORK["queue-rabbit"],
 	},
 	{
-		id: "regex-raccoon", name: "Regex Raccoon", rarity: "R" as Rarity, unlockLevel: 2,
+		id: "regex-raccoon", name: "Regex Raccoon", rarity: "R" as Rarity, probability: 0.125, hidden: false,
 		palette: { o: 235, b: 245, s: 239, h: 255, e: 232, q: 231, m: 235, p: 217, a: 118, i: 255 },
 		lines: [
 			"I found a match! No dumpster diving required.",
@@ -89,7 +78,7 @@ export const PETS = [
 		...ARTWORK["regex-raccoon"],
 	},
 	{
-		id: "cloud-otter", name: "Cloud Otter", rarity: "SR" as Rarity, unlockLevel: 3,
+		id: "cloud-otter", name: "Cloud Otter", rarity: "SR" as Rarity, probability: 0.06, hidden: false,
 		palette: { o: 94, b: 137, s: 95, h: 230, e: 232, q: 231, m: 52, p: 217, a: 159, i: 230 },
 		lines: [
 			"Floating on a cloud of passing tests.",
@@ -100,7 +89,18 @@ export const PETS = [
 		...ARTWORK["cloud-otter"],
 	},
 	{
-		id: "quantum-owl", name: "Quantum Owl", rarity: "SSR" as Rarity, unlockLevel: 5,
+		id: "bug", name: "Bug", rarity: "SSR" as Rarity, probability: 0.003, hidden: true,
+		palette: { o: 53, b: 55, s: 17, h: 120, e: 232, q: 231, m: 198, p: 201, a: 46, i: 120 },
+		lines: [
+			"I'm not a bug. I'm an undocumented companion.",
+			"It works on my terminal.",
+			"You found me before the debugger did.",
+			"My favorite feature is undefined behavior.",
+		],
+		...ARTWORK.bug,
+	},
+	{
+		id: "quantum-owl", name: "Quantum Owl", rarity: "SSR" as Rarity, probability: 0.0135, hidden: false,
 		palette: { o: 17, b: 99, s: 61, h: 225, e: 232, q: 231, m: 17, p: 183, a: 220, i: 225 },
 		lines: [
 			"The bug is both fixed and not. Run the tests.",
@@ -113,71 +113,38 @@ export const PETS = [
 ];
 export type Pet = (typeof PETS)[number];
 
-export function levelForXp(xp: number): number {
-	return Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1;
-}
-
-export function unlockedAtLevel(level: number): string[] {
-	return PETS.filter((pet) => pet.unlockLevel <= level).map((pet) => pet.id);
-}
-
 export function drawPet(random: () => number = Math.random): PetState {
+	const starters = PETS.filter((pet) => pet.rarity === "N");
+	return { version: 4, petId: starters[Math.floor(random() * starters.length)].id, affinity: 0 };
+}
+
+export function drawLottery(random: () => number = Math.random): Pet {
 	const roll = random();
-	const rarity: Rarity = roll < 0.60 ? "N" : roll < 0.85 ? "R" : roll < 0.97 ? "SR" : "SSR";
-	const candidates = PETS.filter((pet) => pet.rarity === rarity);
-	const petId = candidates[Math.floor(random() * candidates.length)].id;
-	return { version: 2, petId, xp: 0, level: 1, affinity: 0, unlockedPetIds: [...new Set([...unlockedAtLevel(1), petId])] };
+	let boundary = 0;
+	for (const pet of PETS) {
+		boundary += pet.probability;
+		if (roll < boundary) return pet;
+	}
+	return PETS[PETS.length - 1];
 }
 
 function validPetId(value: unknown): value is string {
 	return typeof value === "string" && PETS.some((pet) => pet.id === value);
 }
 
-export function migratePet(data: LegacyPetState): PetState {
-	return {
-		version: 2,
-		petId: data.petId,
-		xp: 0,
-		level: 1,
-		affinity: 0,
-		unlockedPetIds: [...new Set([...unlockedAtLevel(1), data.petId])],
-	};
-}
-
-// Read all entries from newest to oldest so progression snapshots survive reloads.
-export function restorePet(entries: readonly { type: string; customType?: string; data?: unknown }[]): { state: PetState; migrated: boolean } | undefined {
+export function restorePet(entries: readonly { type: string; customType?: string; data?: unknown }[]): PetState | undefined {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
-		if (entry?.type !== "custom") continue;
-		if (entry.customType === STATE_TYPE) {
-			const data = entry.data as Partial<PetState> | null;
-			if (data?.version !== 2 || !validPetId(data.petId) || !Number.isInteger(data.xp) || data.xp! < 0 ||
-				!Number.isInteger(data.level) || data.level !== levelForXp(data.xp!) ||
-				!Number.isInteger(data.affinity) || data.affinity! < 0 || data.affinity! > MAX_AFFINITY ||
-				!Array.isArray(data.unlockedPetIds) || !data.unlockedPetIds.every(validPetId) ||
-				!data.unlockedPetIds.includes(data.petId)) continue;
-			const unlockedPetIds = [...new Set([...data.unlockedPetIds, ...unlockedAtLevel(data.level!)])];
-			return {
-				state: { ...data, unlockedPetIds } as PetState,
-				migrated: unlockedPetIds.length !== data.unlockedPetIds.length,
-			};
-		}
-		if (entry.customType === LEGACY_STATE_TYPE) {
-			const data = entry.data as Partial<LegacyPetState> | null;
-			if (data?.version === 1 && validPetId(data.petId)) return { state: migratePet(data as LegacyPetState), migrated: true };
-		}
+		if (entry?.type !== "custom" || entry.customType !== STATE_TYPE) continue;
+		const data = entry.data as Partial<PetState> | null;
+		if (data?.version === 4 && validPetId(data.petId) && Number.isInteger(data.affinity) &&
+			data.affinity! >= 0 && data.affinity! <= MAX_AFFINITY) return data as PetState;
 	}
 	return undefined;
 }
 
-export function gainProgress(state: PetState, xp: number, affinity: number): { state: PetState; unlocked: string[] } {
-	const nextXp = state.xp + xp;
-	const level = levelForXp(nextXp);
-	const unlockedPetIds = [...new Set([...state.unlockedPetIds, ...unlockedAtLevel(level)])];
-	return {
-		state: { ...state, xp: nextXp, level, affinity: Math.min(MAX_AFFINITY, state.affinity + affinity), unlockedPetIds },
-		unlocked: unlockedPetIds.filter((id) => !state.unlockedPetIds.includes(id)),
-	};
+export function gainAffinity(state: PetState, affinity: number): PetState {
+	return { ...state, affinity: Math.min(MAX_AFFINITY, state.affinity + affinity) };
 }
 
 export const JOKES = PETS.flatMap((pet) => pet.lines);
