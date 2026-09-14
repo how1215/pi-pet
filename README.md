@@ -3,9 +3,9 @@
 [![CI](https://github.com/how1215/pi-pet/actions/workflows/ci.yml/badge.svg)](https://github.com/how1215/pi-pet/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**A tiny pixel companion for every pi session. No extra tokens. Just CS jokes.**
+**A tiny pixel companion for every pi session. No extra tokens. Dedicated pet dialogue.**
 
-A pixel-art extension for the [pi coding agent](https://github.com/earendil-works/pi-mono). Each session gets its own randomly selected companion, ready to keep you company and deliver the occasional computer science joke.
+A pixel-art extension for the [pi coding agent](https://github.com/earendil-works/pi-mono). Each session gets its own randomly selected companion with dedicated programming-themed dialogue and lightweight animation states.
 
 ![Pixel artwork: Cache Cat, Stack Fox, Byte Dragon, Kernel Phoenix](assets/pets.png)
 
@@ -16,15 +16,11 @@ A pixel-art extension for the [pi coding agent](https://github.com/earendil-work
 - **One companion per session:** weighted selection on first load; saved sessions and `/reload` keep the same pet.
 - **Non-capturing overlay:** sits in the bottom-right corner without taking keyboard focus or changing your draft.
 - **16-by-12 pixel artwork:** rendered in 16-by-6 terminal cells using half-block characters and ANSI 256 colors. No emoji or image protocol required.
-- **CS humor:** 24 local jokes with no consecutive repeats. Your pet blinks when prompted, and its speech bubble disappears after five seconds.
+- **Dedicated dialogue:** each pet has its own local lines with no consecutive repeats.
+- **Visible animation states:** interactions transition through blinking, talking, and idle poses without a continuous idle timer.
+- **Status command:** inspect the active companion, rarity, animation, and visibility.
 - **No extra model calls:** no registered model tools or pet messages added to the model's context.
 - **Layout safeguards:** fixed dimensions, display-width-aware wrapping, and automatic hiding in small terminals.
-
-> "I'm not procrastinating. This is lazy evaluation."
->
-> "I didn't forget you. It was a cache miss."
->
-> "You're my base case. Without you, I'd recurse forever."
 
 ## Installation
 
@@ -34,7 +30,9 @@ Requires pi. Development and automated tests target **pi 0.85.1 and Node.js 22.1
 pi install https://github.com/how1215/pi-pet
 ```
 
-Run `/reload` in pi to activate the extension. To install it for one project only:
+The default installation is global and is auto-discovered from pi's user package storage in every project. A manual source installation can instead place this repository at `~/.pi/agent/extensions/session-pet/`. Run `/reload` in pi to activate it.
+
+To install it for one project only:
 
 ```sh
 pi install -l https://github.com/how1215/pi-pet
@@ -67,9 +65,11 @@ Use `pi remove -l` for a project-local installation, then run `/reload`.
 | Input | Action |
 | --- | --- |
 | `/pet` | Toggle visibility without changing the pet or triggering speech. |
-| `Ctrl+\` | Tell a CS joke and blink while the pet is visible. |
+| `/pet talk` | Show a non-repeating line from the active pet's dedicated dialogue. |
+| `/pet status` | Report the pet's name, rarity, animation, and visibility. |
+| `Ctrl+\` | Same interaction as `/pet talk`. |
 
-Repeated interactions select a different joke and reset the five-second timer. The shortcut does not reveal a manually hidden pet. Visibility preferences reset on reload.
+Speech disappears after five seconds. Each interaction transitions through `blinking` (180 ms), `talking`, and `idle`. Repeated interactions select a different line and reset the timers. Talking does not reveal a manually hidden pet. Visibility preferences reset on reload.
 
 `Ctrl+\` maps to the standard `0x1c` control character and works in Terminal.app without a custom key mapping. If another extension uses the same shortcut, pi may report a duplicate binding; disable one binding or use `/pet` only for visibility control.
 
@@ -95,15 +95,16 @@ session_start
        ├─ pet: 22 columns × 7 rows
        └─ speech: 38 columns, at most 6 rows
 
-Ctrl+\ → choose joke → blink → expire speech
-/pet   → toggle visibility and clear speech
+Ctrl+\ or /pet talk → choose pet line → blinking → talking → idle
+/pet                  → toggle visibility and clear speech
+/pet status           → report current in-memory status
 session_shutdown / widget disposal → remove overlays + clear timers
 ```
 
 | File | Responsibility |
 | --- | --- |
 | `index.ts` | Lifecycle events, commands, shortcuts, overlay ownership, and cleanup. |
-| `pets.ts` | Pixel artwork, palettes, rarity selection, state validation, and jokes. |
+| `pets.ts` | Pixel artwork, palettes, dedicated dialogue, rarity selection, and state validation. |
 | `view.ts` | ANSI half-block rendering, display-width calculations, and speech bubbles. |
 | `tests/run.mjs` | Content, rendering, lifecycle, and integration checks using pi's native loader and regular-mode TUI. |
 
@@ -132,7 +133,7 @@ npm run check
 
 `check` runs TypeScript type checking and the automated test suite. GitHub Actions runs the checks on Node.js 22 and 24.
 
-Tests cover English content, full pet labels, the absence of panel command hints, pixel dimensions, ANSI display widths from 1 to 120 columns, complete joke wrapping, rarity boundaries, non-repeating jokes, state restoration, visibility toggles, timers, cleanup, focus, resizing, and native extension loading.
+Tests cover English content, pet-specific dialogue, all animation states, full pet labels, the absence of panel command hints, pixel dimensions, ANSI display widths from 1 to 120 columns, dialogue wrapping, rarity boundaries, non-repeating lines, state restoration, commands, visibility toggles, timers, cleanup, focus, resizing, and native extension loading.
 
 Try the extension locally without changing pi's installation settings:
 
@@ -143,7 +144,7 @@ pi -e ./index.ts
 ### Manual verification
 
 1. Type an unsent draft, then press `Ctrl+\`. Confirm that the text and cursor remain unchanged.
-2. Trigger several jokes. The bubble should close five seconds after the last interaction without moving the pet.
+2. Trigger several lines with `Ctrl+\` and `/pet talk`. The bubble should close five seconds after the last interaction without moving the pet.
 3. Shrink the terminal below 60 columns or 24 rows, then enlarge it. Check for clipped sprites or stale bubbles.
 4. Interact during a streaming response and toggle `/pet`. The model should continue uninterrupted.
 5. Reload or resume a saved session and confirm that the companion stays the same. A new session gets an independent draw, which may select the same species.

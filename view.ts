@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import type { Pet } from "./pets.ts";
+import type { AnimationState, Pet } from "./pets.ts";
 
 export const PET_WIDTH = 22;
 export const BUBBLE_WIDTH = 38;
@@ -19,9 +19,13 @@ function centered(text: string, width: number): string {
 
 // Two vertical pixels per cell. Explicit colour resets prevent colour leakage
 // into the editor; no emoji, combining characters, or terminal cursor escapes.
-export function sprite(pet: Pet, blink = false): string[] {
+export function sprite(pet: Pet, animation: AnimationState = "idle"): string[] {
 	const palette = pet.palette as Record<string, number>;
-	const colour = (pixel: string): number | undefined => palette[blink && pixel === "e" ? "s" : pixel];
+	const colour = (pixel: string): number | undefined => {
+		if (animation === "blinking" && pixel === "e") return palette.s;
+		if (animation === "talking" && pixel === "p") return palette.a;
+		return palette[pixel];
+	};
 	const lines: string[] = [];
 	for (let y = 0; y < pet.pixels.length; y += 2) {
 		let line = "";
@@ -38,11 +42,11 @@ export function sprite(pet: Pet, blink = false): string[] {
 	return lines;
 }
 
-export function renderPet(pet: Pet, width: number, theme: Theme, blink = false): string[] {
+export function renderPet(pet: Pet, width: number, theme: Theme, animation: AnimationState = "idle"): string[] {
 	if (width <= 0) return [];
 	const badgeColour = pet.palette.a;
 	return [
-		...sprite(pet, blink).map((line) => centered(line, width)),
+		...sprite(pet, animation).map((line) => centered(line, width)),
 		centered(`\x1b[38;5;${badgeColour}m${pet.rarity}\x1b[0m ${theme.fg("text", pet.name)}`, width),
 	];
 }

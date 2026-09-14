@@ -28,10 +28,12 @@ check("four distinct, rectangular 16x12 sprites with valid palette keys", () => 
 			assert.equal(row.length, 16, `${pet.id}: ${row}`);
 			for (const pixel of row) assert.ok(pixel === "." || pixel in pet.palette, pixel);
 		}
-		for (const blink of [false, true]) {
-			assert.equal(sprite(pet, blink).length, 6);
-			for (const row of sprite(pet, blink)) assert.equal(visibleWidth(row), 16);
+		for (const animation of ["idle", "blinking", "talking"]) {
+			assert.equal(sprite(pet, animation).length, 6);
+			for (const row of sprite(pet, animation)) assert.equal(visibleWidth(row), 16);
 		}
+		assert.equal(pet.lines.length, 4);
+		assert.equal(new Set(pet.lines).size, pet.lines.length);
 	}
 });
 
@@ -51,8 +53,8 @@ check("English content and complete pet labels at the standard width", () => {
 
 check("all sprite states and jokes fit every width from 1 to 120", () => {
 	for (let width = 1; width <= 120; width++) {
-		for (const pet of PETS) for (const blink of [false, true]) {
-			const lines = renderPet(pet, width, theme, blink);
+		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking"]) {
+			const lines = renderPet(pet, width, theme, animation);
 			assert.equal(lines.length, PET_HEIGHT);
 			for (const line of lines) assert.equal(visibleWidth(line), width);
 		}
@@ -107,6 +109,7 @@ const commands = new Map();
 const shortcuts = new Map();
 let entries = [];
 let owner;
+const notifications = [];
 const overlays = [];
 const renderer = {
 	terminal: { columns: 80, rows: 24 },
@@ -124,7 +127,7 @@ const ctx = {
 	sessionManager: { getEntries: () => entries },
 	ui: {
 		setWidget(_key, factory) { owner?.dispose(); owner = factory?.(renderer, theme); },
-		notify() {},
+		notify(message, level) { notifications.push({ message, level }); },
 	},
 };
 extension({
@@ -145,18 +148,22 @@ try {
 		assert.equal(overlays[0].hidden, false);
 		assert.equal(overlays[1].hidden, true);
 	});
-	check("shortcut displays bubble, resets expiry, blink finishes", () => {
+	check("shortcut runs blinking, talking, and idle animation states", () => {
+		const idle = overlays[0].component.render(22);
 		shortcuts.get("ctrl+\\").handler(ctx);
 		assert.equal(overlays[1].hidden, false);
-		const blink = overlays[0].component.render(22);
+		const blinking = overlays[0].component.render(22);
+		assert.notDeepEqual(blinking, idle);
 		mock.timers.tick(180);
-		assert.notDeepEqual(overlays[0].component.render(22), blink);
+		const talking = overlays[0].component.render(22);
+		assert.notDeepEqual(talking, blinking);
 		mock.timers.tick(3820);
 		shortcuts.get("ctrl+\\").handler(ctx);
 		mock.timers.tick(1000);
 		assert.equal(overlays[1].hidden, false);
 		mock.timers.tick(4000);
 		assert.equal(overlays[1].hidden, true);
+		assert.deepEqual(overlays[0].component.render(22), idle);
 	});
 	shortcuts.get("ctrl+\\").handler(ctx);
 	await commands.get("pet").handler("", ctx);
@@ -175,11 +182,23 @@ try {
 		assert.equal(overlays[1].hidden, true);
 		assert.equal(entries.length, 1);
 	});
+	await commands.get("pet").handler("talk", ctx);
+	const activePet = PETS.find((pet) => pet.id === entries[0].data.petId);
+	check("/pet talk uses the active pet's dedicated dialogue", () => {
+		const bubble = overlays[1].component.render(38).join("\n")
+			.replace(/\x1b\[[0-9;]*m/g, "").replace(/[╭─╮│╰┬╯]/g, " ").replace(/\s+/g, " ");
+		assert.ok(activePet.lines.some((line) => bubble.includes(line)));
+		assert.equal(overlays[1].hidden, false);
+	});
+	await commands.get("pet").handler("status", ctx);
+	check("/pet status reports identity, rarity, animation, and visibility", () => {
+		assert.equal(notifications.at(-1).message, `${activePet.name} | Rarity: ${activePet.rarity} | Animation: blinking | Visibility: visible`);
+		assert.deepEqual(commands.get("pet").getArgumentCompletions("t"), [{ value: "talk", label: "talk" }]);
+	});
 	await commands.get("pet").handler("hide", ctx);
-	await commands.get("pet").handler("show", ctx);
-	check("old subcommands no longer change visibility", () => {
+	check("unknown subcommands show usage without changing visibility", () => {
 		assert.equal(overlays[0].hidden, false);
-		assert.equal(commands.get("pet").getArgumentCompletions, undefined);
+		assert.equal(notifications.at(-1).message, "Usage: /pet, /pet talk, or /pet status");
 	});
 	check("temporary prompts hide and restore pet", () => {
 		emit("ui_prompt_start"); assert.equal(overlays[0].hidden, true);

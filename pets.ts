@@ -1,5 +1,6 @@
 export const STATE_TYPE = "session-pet:v1";
 export type Rarity = "N" | "R" | "SR" | "SSR";
+export type AnimationState = "idle" | "blinking" | "talking";
 export interface PetState { version: 1; petId: string }
 
 // 16 x 12 pixels, packed into 16 x 6 terminal cells by the renderer.
@@ -9,6 +10,12 @@ export const PETS = [
 	{
 		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity,
 		palette: { o: 60, b: 223, s: 180, h: 230, e: 235, p: 211, a: 153 },
+		lines: [
+			"That idea is cached. Let's make it fast.",
+			"I found the bug hiding behind a stale key.",
+			"A warm cache and a clean build make a fine day.",
+			"If it works twice, should we memoize it?",
+		],
 		pixels: [
 			"...oo......oo...",
 			"...obo....obo...",
@@ -27,6 +34,12 @@ export const PETS = [
 	{
 		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity,
 		palette: { o: 52, b: 209, s: 166, h: 230, e: 235, p: 217, a: 220 },
+		lines: [
+			"I followed the stack trace all the way home.",
+			"No panic. We can unwind this together.",
+			"One more frame and we'll catch that bug.",
+			"My tail is recursive, but the compiler approves.",
+		],
 		pixels: [
 			"..oo........oo..",
 			"..obo......obo..",
@@ -45,6 +58,12 @@ export const PETS = [
 	{
 		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity,
 		palette: { o: 17, b: 117, s: 68, h: 195, e: 235, p: 183, a: 141 },
+		lines: [
+			"I breathe bits, not fire. Usually.",
+			"Your types are safe under my watch.",
+			"Feed me bytes and I'll guard the build.",
+			"That bug is about to become byte-sized.",
+		],
 		pixels: [
 			".....a....a.....",
 			"....oaobboao....",
@@ -63,6 +82,12 @@ export const PETS = [
 	{
 		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity,
 		palette: { o: 88, b: 214, s: 202, h: 229, e: 235, p: 203, a: 220 },
+		lines: [
+			"From every kernel panic, I rise again.",
+			"Your process has my highest priority.",
+			"Ashes to branches, branches to releases.",
+			"Reboot boldly. I saved the state.",
+		],
 		pixels: [
 			"......a.a.......",
 			".....oaaao......",
@@ -99,35 +124,10 @@ export function restorePet(entries: readonly { type: string; customType?: string
 	return undefined;
 }
 
-export const JOKES = [
-	"I don't have insomnia. I'm just busy waiting.",
-	"I'm not procrastinating. This is lazy evaluation.",
-	"I didn't forget you. It was a cache miss.",
-	"I socialize over UDP. Delivery is not guaranteed.",
-	"Do not disturb. I'm a sleeping thread.",
-	"Current mood: 418 I'm a teapot.",
-	"I'd let go of the past, but it still has references.",
-	"We're not giving each other the silent treatment. It's a distributed deadlock.",
-	"I'm not bulky. I just have high space complexity.",
-	"Life has no undo. Luckily, Git has reflog.",
-	"Forever? Please define a termination condition.",
-	"I'm one of a kind. The pattern is called Singleton.",
-	"I'm not zoning out. I'm waiting for an interrupt.",
-	"My love language is a verified backup.",
-	"You're my base case. Without you, I'd recurse forever.",
-	"My plan is flawless. It just hasn't compiled yet.",
-	"I queued my worries. Now the queue is overflowing.",
-	"I'm not lost. I'm doing depth-first search.",
-	"I'll get my life together. Eventually consistent, right?",
-	"I'm not difficult. You just skipped my API docs.",
-	"I'm not cutting corners. I'm using memoization.",
-	"Love is a race condition. You thought it was your turn.",
-	"I fixed the bug. Its relatives have filed a complaint.",
-	"Before asking life's big questions, check for null.",
-];
+export const JOKES = PETS.flatMap((pet) => pet.lines);
 
-export function nextJoke(previous: number, random: () => number = Math.random): number {
-	if (previous < 0) return Math.floor(random() * JOKES.length);
-	const index = Math.floor(random() * (JOKES.length - 1));
+export function nextJoke(previous: number, random: () => number = Math.random, lines: readonly string[] = JOKES): number {
+	if (previous < 0) return Math.floor(random() * lines.length);
+	const index = Math.floor(random() * (lines.length - 1));
 	return index >= previous ? index + 1 : index;
 }
