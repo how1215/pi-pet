@@ -2,6 +2,21 @@
 
 All notable changes to pi-pet are documented here.
 
+## 1.3.0
+
+### Added
+
+- Two-frame geometric animation for idle and long-lived companion activities at a lightweight 450 ms interval.
+- Idle breathing, talking mouth movement, sleeping body movement and pixel effects, celebration jumps and sparkles, sad drooping, eating crumbs, and playful side-to-side jumps.
+- The current animation state is displayed directly to the right of the companion name.
+- Rendering tests that verify animation frames change pixel geometry rather than only ANSI colours.
+
+### Changed
+
+- The pet panel is 34 columns wide so every companion name and animation state remains visible, including `Kernel Phoenix · celebrating`.
+- Animation timers are owned by the session widget and cleaned up during reload, session replacement, and shutdown.
+- The automated suite now contains 30 checks.
+
 ## 1.2.0
 
 ### Added

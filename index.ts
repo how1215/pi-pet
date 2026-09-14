@@ -6,6 +6,7 @@ import { BOTTOM_MARGIN, BUBBLE_WIDTH, canShow, PET_HEIGHT, PET_WIDTH, renderBubb
 
 const WIDGET = "session-pet:overlay-owner";
 const SLEEP_DELAY = 60_000;
+const ANIMATION_INTERVAL = 450;
 
 export default function sessionPet(pi: ExtensionAPI) {
 	let tui: TUI | undefined;
@@ -14,9 +15,11 @@ export default function sessionPet(pi: ExtensionAPI) {
 	let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 	let animationTimer: ReturnType<typeof setTimeout> | undefined;
 	let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+	let animationLoop: ReturnType<typeof setInterval> | undefined;
 	let hidden = false;
 	let prompting = false;
 	let animation: AnimationState = "idle";
+	let animationFrame = 0;
 	let speech = "";
 	let previousLine = -1;
 	let activePet: Pet | undefined;
@@ -35,12 +38,17 @@ export default function sessionPet(pi: ExtensionAPI) {
 		bubbleTimer = animationTimer = sleepTimer = undefined;
 	}
 
+	function setAnimation(next: AnimationState) {
+		animation = next;
+		animationFrame = 0;
+	}
+
 	function scheduleSleep() {
 		clearTimeout(sleepTimer);
 		if (!tui || !activePet) return;
 		sleepTimer = setTimeout(() => {
 			if (!speech) {
-				animation = "sleeping";
+				setAnimation("sleeping");
 				updateVisibility();
 			}
 		}, SLEEP_DELAY);
@@ -55,10 +63,10 @@ export default function sessionPet(pi: ExtensionAPI) {
 		if (!tui || !activePet) return;
 		clearActivityTimers();
 		speech = text;
-		animation = nextAnimation;
+		setAnimation(nextAnimation);
 		bubbleTimer = setTimeout(() => {
 			speech = "";
-			animation = "idle";
+			setAnimation("idle");
 			updateVisibility();
 			scheduleSleep();
 		}, duration);
@@ -67,6 +75,8 @@ export default function sessionPet(pi: ExtensionAPI) {
 
 	function cleanup() {
 		clearActivityTimers();
+		clearInterval(animationLoop);
+		animationLoop = undefined;
 		petHandle?.hide();
 		bubbleHandle?.hide();
 		petHandle = bubbleHandle = undefined;
@@ -78,8 +88,9 @@ export default function sessionPet(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		cleanup();
 		if (ctx.mode !== "tui") return;
+		ctx.ui.setWidget(WIDGET, undefined);
 		hidden = prompting = false;
-		animation = "idle";
+		setAnimation("idle");
 		speech = "";
 		previousLine = -1;
 		const restored = restorePet(ctx.sessionManager.getEntries());
@@ -92,7 +103,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 		ctx.ui.setWidget(WIDGET, (renderer, theme) => {
 			tui = renderer;
 			petHandle = renderer.showOverlay({
-				render: (width) => renderPet(activePet!, width, theme, animation),
+				render: (width) => renderPet(activePet!, width, theme, animation, animationFrame),
 				invalidate() {},
 			}, {
 				nonCapturing: true,
@@ -111,6 +122,10 @@ export default function sessionPet(pi: ExtensionAPI) {
 				margin: { right: 2, bottom: BOTTOM_MARGIN + PET_HEIGHT },
 				visible: canShow,
 			});
+			animationLoop = setInterval(() => {
+				animationFrame = (animationFrame + 1) % 2;
+				tui?.requestRender();
+			}, ANIMATION_INTERVAL);
 			updateVisibility();
 			scheduleSleep();
 			return { render: () => [], invalidate() {}, dispose: cleanup };
@@ -126,14 +141,14 @@ export default function sessionPet(pi: ExtensionAPI) {
 		clearActivityTimers();
 		previousLine = nextJoke(previousLine, Math.random, activePet.lines);
 		speech = activePet.lines[previousLine];
-		animation = "blinking";
+		setAnimation("blinking");
 		animationTimer = setTimeout(() => {
-			animation = "talking";
+			setAnimation("talking");
 			tui?.requestRender();
 		}, 180);
 		bubbleTimer = setTimeout(() => {
 			speech = "";
-			animation = "idle";
+			setAnimation("idle");
 			updateVisibility();
 			scheduleSleep();
 		}, 5000);
@@ -207,7 +222,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 			if (ctx.mode !== "tui" || !tui) return;
 			hidden = !hidden;
 			speech = "";
-			animation = "idle";
+			setAnimation("idle");
 			clearActivityTimers();
 			updateVisibility();
 			scheduleSleep();

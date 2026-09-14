@@ -29,8 +29,10 @@ check("four distinct, rectangular 16x12 sprites with valid palette keys", () => 
 			for (const pixel of row) assert.ok(pixel === "." || pixel in pet.palette, pixel);
 		}
 		for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
-			assert.equal(sprite(pet, animation).length, 6);
-			for (const row of sprite(pet, animation)) assert.equal(visibleWidth(row), 16);
+			for (const frame of [0, 1]) {
+				assert.equal(sprite(pet, animation, frame).length, 6);
+				for (const row of sprite(pet, animation, frame)) assert.equal(visibleWidth(row), 16);
+			}
 		}
 		assert.equal(pet.lines.length, 4);
 		assert.equal(new Set(pet.lines).size, pet.lines.length);
@@ -42,9 +44,11 @@ check("English content and complete pet labels at the standard width", () => {
 		assert.match(text, /^[\x20-\x7e]+$/, "names and jokes must use printable English text");
 	}
 	for (const pet of PETS) {
-		const rendered = renderPet(pet, 22, theme).join("\n");
-		assert.ok(rendered.includes(pet.name), "English labels must not be clipped");
-		assert.equal(rendered.includes("/pet"), false, "the pet panel must not show command hints");
+		for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
+			const rendered = renderPet(pet, 34, theme, animation).join("\n");
+			assert.ok(rendered.includes(`${pet.name} · ${animation}`), "name and animation label must not be clipped");
+			assert.equal(rendered.includes("/pet"), false, "the pet panel must not show command hints");
+		}
 	}
 	for (const file of ["../README.md", "../index.ts", "../pets.ts", "../view.ts"]) {
 		assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /\p{Script=Han}/u, file);
@@ -53,8 +57,8 @@ check("English content and complete pet labels at the standard width", () => {
 
 check("all sprite states and dialogue fit every width from 1 to 120", () => {
 	for (let width = 1; width <= 120; width++) {
-		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
-			const lines = renderPet(pet, width, theme, animation);
+		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) for (const frame of [0, 1]) {
+			const lines = renderPet(pet, width, theme, animation, frame);
 			assert.equal(lines.length, PET_HEIGHT);
 			for (const line of lines) assert.equal(visibleWidth(line), width);
 		}
@@ -67,6 +71,15 @@ check("all sprite states and dialogue fit every width from 1 to 120", () => {
 		assert.ok(renderBubble(joke, 38, theme).length <= 6);
 	}
 	assert.deepEqual(renderPet(PETS[0], 0, theme), []);
+});
+
+check("active animations change pixel geometry instead of only colours", () => {
+	for (const pet of PETS) {
+		for (const animation of ["idle", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
+			assert.notDeepEqual(sprite(pet, animation, 0), sprite(pet, animation, 1), `${pet.id} ${animation}`);
+		}
+		assert.notDeepEqual(sprite(pet, "blinking", 0), sprite(pet, "idle", 0));
+	}
 });
 
 check("rarity thresholds and exact 60/25/12/3 weighted allocation", () => {
@@ -159,7 +172,7 @@ extension({
 });
 const emit = (name) => events.get(name)({}, ctx);
 
-mock.timers.enable({ apis: ["setTimeout"] });
+mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
 try {
 	check("session startup persists once; widget takes zero lines", () => {
 		emit("session_start");
@@ -184,7 +197,7 @@ try {
 		assert.equal(overlays[1].hidden, false);
 		mock.timers.tick(4000);
 		assert.equal(overlays[1].hidden, true);
-		assert.deepEqual(overlays[0].component.render(22), idle);
+		assert.ok(overlays[0].component.render(34).join("\n").includes("· idle"));
 	});
 	shortcuts.get("ctrl+\\").handler(ctx);
 	await commands.get("pet").handler("", ctx);

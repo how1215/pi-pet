@@ -17,7 +17,8 @@ A pixel-art extension for the [pi coding agent](https://github.com/earendil-work
 - **Non-capturing overlay:** sits in the bottom-right corner without taking keyboard focus or changing your draft.
 - **16-by-12 pixel artwork:** rendered in 16-by-6 terminal cells using half-block characters and ANSI 256 colors. No emoji or image protocol required.
 - **Dedicated dialogue:** each pet has its own local lines with no consecutive repeats.
-- **Visible animation states:** interactions transition through blinking, talking, and idle poses without continuous redraws.
+- **Multi-frame pixel animation:** companions breathe, jump, sway, droop, close their eyes, move their mouths, and emit small pixel effects instead of only changing colours.
+- **Live state label:** the active animation appears to the right of the companion name.
 - **Progression:** feeding and playing award XP and affinity; every 100 XP raises the pet level.
 - **Collection:** level milestones unlock companions that can be viewed and selected by ID.
 - **More reactions:** sleeping, celebrating, sad, eating, and playing poses join the existing idle, blinking, and talking states.
@@ -25,7 +26,7 @@ A pixel-art extension for the [pi coding agent](https://github.com/earendil-work
 - **No extra model calls:** no registered model tools or pet messages added to the model's context.
 - **Layout safeguards:** fixed dimensions, display-width-aware wrapping, and automatic hiding in small terminals.
 
-See [CHANGELOG.md](CHANGELOG.md) for the v1.1.0 and v1.2.0 release details.
+See [CHANGELOG.md](CHANGELOG.md) for release details.
 
 ## Installation
 
@@ -101,7 +102,7 @@ Pet IDs remain stable across updates, so existing saved sessions retain their co
 session_start
   ├─ restore custom entry, or draw + appendEntry
   └─ zero-height widget owns two non-capturing overlays
-       ├─ pet: 22 columns × 7 rows
+       ├─ pet: 34 columns × 7 rows
        └─ speech: 38 columns, at most 6 rows
 
 Ctrl+\ or /pet talk → choose pet line → blinking → talking → idle
@@ -119,7 +120,7 @@ session_shutdown / widget disposal → remove overlays + clear timers
 | `view.ts` | ANSI half-block rendering, display-width calculations, and speech bubbles. |
 | `tests/run.mjs` | Content, rendering, lifecycle, and integration checks using pi's native loader and regular-mode TUI. |
 
-A zero-height widget provides pi's public TUI factory and disposal hook. It owns two non-capturing overlays rather than holding a permanent blocking `custom()` prompt open. The pet does not continuously redraw while idle.
+A zero-height widget provides pi's public TUI factory and disposal hook. It owns two non-capturing overlays rather than holding a permanent blocking `custom()` prompt open. A local 450 ms two-frame loop advances pixel poses and is disposed with the widget; it never calls the model.
 
 Progression snapshots are stored with `pi.appendEntry("session-pet:v2", ...)` and excluded from the model's context. The latest valid snapshot restores the selected pet, XP, level, affinity, and unlocks. Existing `session-pet:v1` entries are migrated automatically and retain their selected companion.
 
@@ -144,7 +145,7 @@ npm run check
 
 `check` runs TypeScript type checking and the automated test suite. GitHub Actions runs the checks on Node.js 22 and 24.
 
-Tests cover English content, pet-specific dialogue, all eight animation states, progression and affinity limits, unlocks and selection, v1 migration, v2 restoration, tool reactions, sleeping, full pet labels, pixel dimensions, ANSI display widths, commands, timers, cleanup, focus, resizing, and native extension loading.
+Tests cover English content, pet-specific dialogue, all eight multi-frame animation states, geometric frame changes, complete name/state labels, progression and affinity limits, unlocks and selection, v1 migration, v2 restoration, tool reactions, sleeping, pixel dimensions, ANSI display widths, timers, cleanup, focus, resizing, and native extension loading.
 
 Try the extension locally without changing pi's installation settings:
 
