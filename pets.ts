@@ -1,14 +1,26 @@
-export const STATE_TYPE = "session-pet:v1";
+export const STATE_TYPE = "session-pet:v2";
+export const LEGACY_STATE_TYPE = "session-pet:v1";
 export type Rarity = "N" | "R" | "SR" | "SSR";
-export type AnimationState = "idle" | "blinking" | "talking";
-export interface PetState { version: 1; petId: string }
+export type AnimationState = "idle" | "blinking" | "talking" | "sleeping" | "celebrating" | "sad" | "eating" | "playing";
+export interface LegacyPetState { version: 1; petId: string }
+export interface PetState {
+	version: 2;
+	petId: string;
+	xp: number;
+	level: number;
+	affinity: number;
+	unlockedPetIds: string[];
+}
+
+export const XP_PER_LEVEL = 100;
+export const MAX_AFFINITY = 100;
 
 // 16 x 12 pixels, packed into 16 x 6 terminal cells by the renderer.
 // . = empty, o = outline, b = body, s = shadow, h = highlight,
 // e = eyes, p = cheeks, a = accent. ANSI 256 colours work in Terminal.app.
 export const PETS = [
 	{
-		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity,
+		id: "cache-cat", name: "Cache Cat", rarity: "N" as Rarity, unlockLevel: 1,
 		palette: { o: 60, b: 223, s: 180, h: 230, e: 235, p: 211, a: 153 },
 		lines: [
 			"That idea is cached. Let's make it fast.",
@@ -32,7 +44,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity,
+		id: "stack-fox", name: "Stack Fox", rarity: "R" as Rarity, unlockLevel: 2,
 		palette: { o: 52, b: 209, s: 166, h: 230, e: 235, p: 217, a: 220 },
 		lines: [
 			"I followed the stack trace all the way home.",
@@ -56,7 +68,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity,
+		id: "byte-dragon", name: "Byte Dragon", rarity: "SR" as Rarity, unlockLevel: 3,
 		palette: { o: 17, b: 117, s: 68, h: 195, e: 235, p: 183, a: 141 },
 		lines: [
 			"I breathe bits, not fire. Usually.",
@@ -80,7 +92,7 @@ export const PETS = [
 		],
 	},
 	{
-		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity,
+		id: "kernel-phoenix", name: "Kernel Phoenix", rarity: "SSR" as Rarity, unlockLevel: 5,
 		palette: { o: 88, b: 214, s: 202, h: 229, e: 235, p: 203, a: 220 },
 		lines: [
 			"From every kernel panic, I rise again.",
@@ -106,22 +118,66 @@ export const PETS = [
 ];
 export type Pet = (typeof PETS)[number];
 
+export function levelForXp(xp: number): number {
+	return Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1;
+}
+
+export function unlockedAtLevel(level: number): string[] {
+	return PETS.filter((pet) => pet.unlockLevel <= level).map((pet) => pet.id);
+}
+
 export function drawPet(random: () => number = Math.random): PetState {
 	const roll = random();
 	const index = roll < 0.60 ? 0 : roll < 0.85 ? 1 : roll < 0.97 ? 2 : 3;
-	return { version: 1, petId: PETS[index].id };
+	const petId = PETS[index].id;
+	return { version: 2, petId, xp: 0, level: 1, affinity: 0, unlockedPetIds: [...new Set([PETS[0].id, petId])] };
 }
 
-// Read ALL entries: navigating /tree must not reroll the session companion.
-export function restorePet(entries: readonly { type: string; customType?: string; data?: unknown }[]): PetState | undefined {
-	for (const entry of entries) {
-		if (entry.type !== "custom" || entry.customType !== STATE_TYPE) continue;
-		const data = entry.data as Partial<PetState> | null;
-		if (data?.version === 1 && PETS.some((pet) => pet.id === data.petId)) {
-			return { version: 1, petId: data.petId! };
+function validPetId(value: unknown): value is string {
+	return typeof value === "string" && PETS.some((pet) => pet.id === value);
+}
+
+export function migratePet(data: LegacyPetState): PetState {
+	return {
+		version: 2,
+		petId: data.petId,
+		xp: 0,
+		level: 1,
+		affinity: 0,
+		unlockedPetIds: [...new Set([PETS[0].id, data.petId])],
+	};
+}
+
+// Read all entries from newest to oldest so progression snapshots survive reloads.
+export function restorePet(entries: readonly { type: string; customType?: string; data?: unknown }[]): { state: PetState; migrated: boolean } | undefined {
+	for (let index = entries.length - 1; index >= 0; index--) {
+		const entry = entries[index];
+		if (entry?.type !== "custom") continue;
+		if (entry.customType === STATE_TYPE) {
+			const data = entry.data as Partial<PetState> | null;
+			if (data?.version !== 2 || !validPetId(data.petId) || !Number.isInteger(data.xp) || data.xp! < 0 ||
+				!Number.isInteger(data.level) || data.level !== levelForXp(data.xp!) ||
+				!Number.isInteger(data.affinity) || data.affinity! < 0 || data.affinity! > MAX_AFFINITY ||
+				!Array.isArray(data.unlockedPetIds) || !data.unlockedPetIds.every(validPetId) ||
+				!data.unlockedPetIds.includes(data.petId)) continue;
+			return { state: { ...data, unlockedPetIds: [...new Set(data.unlockedPetIds)] } as PetState, migrated: false };
+		}
+		if (entry.customType === LEGACY_STATE_TYPE) {
+			const data = entry.data as Partial<LegacyPetState> | null;
+			if (data?.version === 1 && validPetId(data.petId)) return { state: migratePet(data as LegacyPetState), migrated: true };
 		}
 	}
 	return undefined;
+}
+
+export function gainProgress(state: PetState, xp: number, affinity: number): { state: PetState; unlocked: string[] } {
+	const nextXp = state.xp + xp;
+	const level = levelForXp(nextXp);
+	const unlockedPetIds = [...new Set([...state.unlockedPetIds, ...unlockedAtLevel(level)])];
+	return {
+		state: { ...state, xp: nextXp, level, affinity: Math.min(MAX_AFFINITY, state.affinity + affinity), unlockedPetIds },
+		unlocked: unlockedPetIds.filter((id) => !state.unlockedPetIds.includes(id)),
+	};
 }
 
 export const JOKES = PETS.flatMap((pet) => pet.lines);

@@ -17,10 +17,15 @@ A pixel-art extension for the [pi coding agent](https://github.com/earendil-work
 - **Non-capturing overlay:** sits in the bottom-right corner without taking keyboard focus or changing your draft.
 - **16-by-12 pixel artwork:** rendered in 16-by-6 terminal cells using half-block characters and ANSI 256 colors. No emoji or image protocol required.
 - **Dedicated dialogue:** each pet has its own local lines with no consecutive repeats.
-- **Visible animation states:** interactions transition through blinking, talking, and idle poses without a continuous idle timer.
-- **Status command:** inspect the active companion, rarity, animation, and visibility.
+- **Visible animation states:** interactions transition through blinking, talking, and idle poses without continuous redraws.
+- **Progression:** feeding and playing award XP and affinity; every 100 XP raises the pet level.
+- **Collection:** level milestones unlock companions that can be viewed and selected by ID.
+- **More reactions:** sleeping, celebrating, sad, eating, and playing poses join the existing idle, blinking, and talking states.
+- **Tool feedback:** successful and failed tool executions trigger local visual reactions without changing progression.
 - **No extra model calls:** no registered model tools or pet messages added to the model's context.
 - **Layout safeguards:** fixed dimensions, display-width-aware wrapping, and automatic hiding in small terminals.
+
+See [CHANGELOG.md](CHANGELOG.md) for the v1.1.0 and v1.2.0 release details.
 
 ## Installation
 
@@ -66,10 +71,14 @@ Use `pi remove -l` for a project-local installation, then run `/reload`.
 | --- | --- |
 | `/pet` | Toggle visibility without changing the pet or triggering speech. |
 | `/pet talk` | Show a non-repeating line from the active pet's dedicated dialogue. |
-| `/pet status` | Report the pet's name, rarity, animation, and visibility. |
+| `/pet status` | Report the pet's level, XP, affinity, animation, and visibility. |
+| `/pet feed` | Gain 15 XP and 10 affinity; trigger the eating pose. |
+| `/pet play` | Gain 25 XP and 15 affinity; trigger the playing pose. |
+| `/pet list` | Show every companion and its active, unlocked, or locked state. |
+| `/pet select <pet-id>` | Select an unlocked companion. |
 | `Ctrl+\` | Same interaction as `/pet talk`. |
 
-Speech disappears after five seconds. Each interaction transitions through `blinking` (180 ms), `talking`, and `idle`. Repeated interactions select a different line and reset the timers. Talking does not reveal a manually hidden pet. Visibility preferences reset on reload.
+Speech disappears after five seconds. Talking transitions through `blinking` (180 ms), `talking`, and `idle`. The pet sleeps after 60 seconds without activity. Successful tools trigger `celebrating`; failed tools trigger `sad`. Repeated talk interactions select a different line and reset the timers. Interactions do not reveal a manually hidden pet. Visibility preferences reset on reload.
 
 `Ctrl+\` maps to the standard `0x1c` control character and works in Terminal.app without a custom key mapping. If another extension uses the same shortcut, pi may report a duplicate binding; disable one binding or use `/pet` only for visibility control.
 
@@ -82,9 +91,9 @@ Speech disappears after five seconds. Each interaction transitions through `blin
 | SR | 12% | Byte Dragon | Ice blue and purple |
 | SSR | 3% | Kernel Phoenix | Gold and flame red |
 
-Rarity is cosmetic. There are no rerolls, collection mechanics, payments, or neglect penalties.
+The initial weighted draw is always unlocked. Cache Cat is available at level 1; Stack Fox unlocks at level 2, Byte Dragon at level 3, and Kernel Phoenix at level 5. Affinity is capped at 100. There are no payments or neglect penalties.
 
-Pet IDs remain stable across language updates, so existing saved sessions retain their companions.
+Pet IDs remain stable across updates, so existing saved sessions retain their companions.
 
 ## Architecture
 
@@ -96,8 +105,10 @@ session_start
        └─ speech: 38 columns, at most 6 rows
 
 Ctrl+\ or /pet talk → choose pet line → blinking → talking → idle
+/pet feed or play     → persist progression → eating or playing
+/pet list/select      → inspect or change unlocked companion
+successful/failed tool → celebrating/sad → idle → sleeping
 /pet                  → toggle visibility and clear speech
-/pet status           → report current in-memory status
 session_shutdown / widget disposal → remove overlays + clear timers
 ```
 
@@ -110,7 +121,7 @@ session_shutdown / widget disposal → remove overlays + clear timers
 
 A zero-height widget provides pi's public TUI factory and disposal hook. It owns two non-capturing overlays rather than holding a permanent blocking `custom()` prompt open. The pet does not continuously redraw while idle.
 
-State is stored with `pi.appendEntry("session-pet:v1", ...)` and excluded from the model's context. Restoration reads all session entries so navigating `/tree` within a session does not reroll the companion.
+Progression snapshots are stored with `pi.appendEntry("session-pet:v2", ...)` and excluded from the model's context. The latest valid snapshot restores the selected pet, XP, level, affinity, and unlocks. Existing `session-pet:v1` entries are migrated automatically and retain their selected companion.
 
 Forks and clones inherit the pet when they retain its custom entry. Branching from before the extension was first enabled creates a new pet. Sessions started with `--no-session` do not persist across processes.
 
@@ -133,7 +144,7 @@ npm run check
 
 `check` runs TypeScript type checking and the automated test suite. GitHub Actions runs the checks on Node.js 22 and 24.
 
-Tests cover English content, pet-specific dialogue, all animation states, full pet labels, the absence of panel command hints, pixel dimensions, ANSI display widths from 1 to 120 columns, dialogue wrapping, rarity boundaries, non-repeating lines, state restoration, commands, visibility toggles, timers, cleanup, focus, resizing, and native extension loading.
+Tests cover English content, pet-specific dialogue, all eight animation states, progression and affinity limits, unlocks and selection, v1 migration, v2 restoration, tool reactions, sleeping, full pet labels, pixel dimensions, ANSI display widths, commands, timers, cleanup, focus, resizing, and native extension loading.
 
 Try the extension locally without changing pi's installation settings:
 
@@ -145,9 +156,11 @@ pi -e ./index.ts
 
 1. Type an unsent draft, then press `Ctrl+\`. Confirm that the text and cursor remain unchanged.
 2. Trigger several lines with `Ctrl+\` and `/pet talk`. The bubble should close five seconds after the last interaction without moving the pet.
-3. Shrink the terminal below 60 columns or 24 rows, then enlarge it. Check for clipped sprites or stale bubbles.
-4. Interact during a streaming response and toggle `/pet`. The model should continue uninterrupted.
-5. Reload or resume a saved session and confirm that the companion stays the same. A new session gets an independent draw, which may select the same species.
+3. Use `/pet feed`, `/pet play`, `/pet list`, and `/pet select`; reload and confirm progression remains intact.
+4. Run successful and failing tools, then wait for the sleeping pose. Confirm each reaction renders and expires.
+5. Shrink the terminal below 60 columns or 24 rows, then enlarge it. Check for clipped sprites or stale bubbles.
+6. Interact during a streaming response and toggle `/pet`. The model should continue uninterrupted.
+7. Reload or resume a saved session and confirm that the companion stays the same. A new session gets an independent draw, which may select the same species.
 
 ## Credits and license
 

@@ -1,7 +1,7 @@
 {
   "name": "pi-session-pet",
-  "version": "1.1.0",
-  "description": "A session-bound pixel companion for pi, with rarity rolls and computer science jokes.",
+  "version": "1.2.0",
+  "description": "A session-bound pixel companion for pi, with progression, collections, and animated reactions.",
   "type": "module",
   "license": "MIT",
   "author": "how1215",
@@ -10,7 +10,7 @@
   "bugs": { "url": "https://github.com/how1215/pi-pet/issues" },
   "keywords": ["pi-package", "pi", "terminal", "pixel-art", "virtual-pet", "typescript"],
   "engines": { "node": ">=22.19.0" },
-  "files": ["index.ts", "pets.ts", "view.ts", "assets/pets.png", "README.md", "LICENSE"],
+  "files": ["index.ts", "pets.ts", "view.ts", "assets/pets.png", "README.md", "CHANGELOG.md", "LICENSE"],
   "pi": {
     "extensions": ["./index.ts"],
     "image": "https://raw.githubusercontent.com/how1215/pi-pet/main/assets/pets.png"

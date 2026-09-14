@@ -22,8 +22,10 @@ function centered(text: string, width: number): string {
 export function sprite(pet: Pet, animation: AnimationState = "idle"): string[] {
 	const palette = pet.palette as Record<string, number>;
 	const colour = (pixel: string): number | undefined => {
-		if (animation === "blinking" && pixel === "e") return palette.s;
-		if (animation === "talking" && pixel === "p") return palette.a;
+		if ((animation === "blinking" || animation === "sleeping") && pixel === "e") return palette.s;
+		if ((animation === "talking" || animation === "eating") && pixel === "p") return palette.a;
+		if ((animation === "celebrating" || animation === "playing") && (pixel === "p" || pixel === "h")) return palette.a;
+		if (animation === "sad" && (pixel === "e" || pixel === "p")) return palette.s;
 		return palette[pixel];
 	};
 	const lines: string[] = [];

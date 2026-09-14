@@ -12,7 +12,7 @@ const { createJiti } = requirePi("jiti");
 const jiti = createJiti(import.meta.url, {
 	alias: { "@earendil-works/pi-tui": requirePi.resolve("@earendil-works/pi-tui") },
 });
-const { PETS, JOKES, drawPet, restorePet, nextJoke, STATE_TYPE } = await jiti.import("../pets.ts");
+const { PETS, JOKES, drawPet, gainProgress, levelForXp, restorePet, nextJoke, LEGACY_STATE_TYPE, STATE_TYPE } = await jiti.import("../pets.ts");
 const { sprite, renderPet, renderBubble, canShow, PET_HEIGHT } = await jiti.import("../view.ts");
 const { default: extension } = await jiti.import("../index.ts");
 const { visibleWidth, wrapTextWithAnsi, matchesKey, TuiMainScreen } = await import(requirePi.resolve("@earendil-works/pi-tui"));
@@ -28,7 +28,7 @@ check("four distinct, rectangular 16x12 sprites with valid palette keys", () => 
 			assert.equal(row.length, 16, `${pet.id}: ${row}`);
 			for (const pixel of row) assert.ok(pixel === "." || pixel in pet.palette, pixel);
 		}
-		for (const animation of ["idle", "blinking", "talking"]) {
+		for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
 			assert.equal(sprite(pet, animation).length, 6);
 			for (const row of sprite(pet, animation)) assert.equal(visibleWidth(row), 16);
 		}
@@ -51,9 +51,9 @@ check("English content and complete pet labels at the standard width", () => {
 	}
 });
 
-check("all sprite states and jokes fit every width from 1 to 120", () => {
+check("all sprite states and dialogue fit every width from 1 to 120", () => {
 	for (let width = 1; width <= 120; width++) {
-		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking"]) {
+		for (const pet of PETS) for (const animation of ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"]) {
 			const lines = renderPet(pet, width, theme, animation);
 			assert.equal(lines.length, PET_HEIGHT);
 			for (const line of lines) assert.equal(visibleWidth(line), width);
@@ -78,13 +78,34 @@ check("rarity thresholds and exact 60/25/12/3 weighted allocation", () => {
 	}
 });
 
-check("state restoration validates data and ignores unrelated entries", () => {
-	const state = drawPet(() => 0.99);
-	const entry = { type: "custom", customType: STATE_TYPE, data: state };
-	assert.deepEqual(restorePet([{ ...entry, data: null }, entry]), state);
-	assert.equal(restorePet([{ ...entry, data: { version: 1, petId: "missing" } }]), undefined);
+check("v2 state restoration validates snapshots and uses the newest valid state", () => {
+	const first = drawPet(() => 0.99);
+	const latest = gainProgress(first, 125, 20).state;
+	const entry = { type: "custom", customType: STATE_TYPE, data: first };
+	assert.deepEqual(restorePet([{ ...entry, data: null }, entry]), { state: first, migrated: false });
+	assert.equal(restorePet([{ ...entry, data: { ...first, level: 99 } }]), undefined);
 	assert.equal(restorePet([{ ...entry, customType: "other" }]), undefined);
-	assert.deepEqual(restorePet([entry, { ...entry, data: drawPet(() => 0) }]), state);
+	assert.deepEqual(restorePet([entry, { ...entry, data: latest }]), { state: latest, migrated: false });
+});
+
+check("v1 state migrates without losing its selected pet", () => {
+	const legacy = { version: 1, petId: "kernel-phoenix" };
+	const restored = restorePet([{ type: "custom", customType: LEGACY_STATE_TYPE, data: legacy }]);
+	assert.equal(restored.migrated, true);
+	assert.deepEqual(restored.state, {
+		version: 2, petId: "kernel-phoenix", xp: 0, level: 1, affinity: 0,
+		unlockedPetIds: ["cache-cat", "kernel-phoenix"],
+	});
+});
+
+check("progression calculates levels, caps affinity, and unlocks by level", () => {
+	const initial = drawPet(() => 0);
+	const result = gainProgress(initial, 450, 150);
+	assert.equal(levelForXp(result.state.xp), 5);
+	assert.equal(result.state.level, 5);
+	assert.equal(result.state.affinity, 100);
+	assert.deepEqual(result.state.unlockedPetIds, PETS.map((pet) => pet.id));
+	assert.deepEqual(result.unlocked, PETS.slice(1).map((pet) => pet.id));
 });
 
 check("jokes never repeat consecutively, including random endpoints", () => {
@@ -183,22 +204,67 @@ try {
 		assert.equal(entries.length, 1);
 	});
 	await commands.get("pet").handler("talk", ctx);
-	const activePet = PETS.find((pet) => pet.id === entries[0].data.petId);
+	const initialState = entries[0].data;
+	const initialPet = PETS.find((pet) => pet.id === initialState.petId);
 	check("/pet talk uses the active pet's dedicated dialogue", () => {
 		const bubble = overlays[1].component.render(38).join("\n")
 			.replace(/\x1b\[[0-9;]*m/g, "").replace(/[╭─╮│╰┬╯]/g, " ").replace(/\s+/g, " ");
-		assert.ok(activePet.lines.some((line) => bubble.includes(line)));
+		assert.ok(initialPet.lines.some((line) => bubble.includes(line)));
 		assert.equal(overlays[1].hidden, false);
 	});
+	await commands.get("pet").handler("feed", ctx);
+	check("/pet feed persists XP and affinity with an eating reaction", () => {
+		assert.deepEqual(entries.at(-1).data, { ...initialState, xp: 15, affinity: 10 });
+		assert.notDeepEqual(overlays[0].component.render(22), renderPet(initialPet, 22, theme, "idle"));
+	});
+	await commands.get("pet").handler("play", ctx);
+	check("/pet play adds its progression snapshot", () => {
+		assert.equal(entries.at(-1).data.xp, 40);
+		assert.equal(entries.at(-1).data.affinity, 25);
+	});
 	await commands.get("pet").handler("status", ctx);
-	check("/pet status reports identity, rarity, animation, and visibility", () => {
-		assert.equal(notifications.at(-1).message, `${activePet.name} | Rarity: ${activePet.rarity} | Animation: blinking | Visibility: visible`);
-		assert.deepEqual(commands.get("pet").getArgumentCompletions("t"), [{ value: "talk", label: "talk" }]);
+	check("/pet status reports progression, animation, and visibility", () => {
+		assert.equal(notifications.at(-1).message, `${initialPet.name} | Rarity: ${initialPet.rarity} | Level: 1 | XP: 40 (40/100) | Affinity: 25/100 | Animation: playing | Visibility: visible`);
+		assert.deepEqual(commands.get("pet").getArgumentCompletions("f"), [{ value: "feed", label: "feed" }]);
+	});
+	await commands.get("pet").handler("list", ctx);
+	check("/pet list shows the complete collection and lock state", () => {
+		for (const pet of PETS) assert.match(notifications.at(-1).message, new RegExp(`${pet.id} \\| ${pet.name}`));
+	});
+	const lockedPet = PETS.find((pet) => !entries.at(-1).data.unlockedPetIds.includes(pet.id));
+	await commands.get("pet").handler(`select ${lockedPet.id}`, ctx);
+	check("/pet select rejects locked pets", () => {
+		assert.equal(entries.at(-1).data.petId, initialPet.id);
+		assert.equal(notifications.at(-1).level, "warning");
+	});
+	for (let index = 0; index < 15; index++) await commands.get("pet").handler("play", ctx);
+	await commands.get("pet").handler("select kernel-phoenix", ctx);
+	check("training unlocks pets and /pet select switches the rendered companion", () => {
+		assert.equal(entries.at(-1).data.level, 5);
+		assert.deepEqual(entries.at(-1).data.unlockedPetIds, PETS.map((pet) => pet.id));
+		assert.equal(entries.at(-1).data.petId, "kernel-phoenix");
+		assert.ok(overlays[0].component.render(22).join("\n").includes("Kernel Phoenix"));
+		assert.deepEqual(commands.get("pet").getArgumentCompletions("select k"), [{ value: "select kernel-phoenix", label: "select kernel-phoenix" }]);
+	});
+	events.get("tool_execution_end")({ isError: false }, ctx);
+	check("successful tools trigger the celebrating animation", () => {
+		assert.notDeepEqual(overlays[0].component.render(22), renderPet(PETS[3], 22, theme, "idle"));
+	});
+	events.get("tool_execution_end")({ isError: true }, ctx);
+	await commands.get("pet").handler("status", ctx);
+	check("failed tools trigger the sad animation", () => {
+		assert.match(notifications.at(-1).message, /Animation: sad/);
+	});
+	mock.timers.tick(3000);
+	mock.timers.tick(60000);
+	await commands.get("pet").handler("status", ctx);
+	check("the pet sleeps after inactivity", () => {
+		assert.match(notifications.at(-1).message, /Animation: sleeping/);
 	});
 	await commands.get("pet").handler("hide", ctx);
 	check("unknown subcommands show usage without changing visibility", () => {
 		assert.equal(overlays[0].hidden, false);
-		assert.equal(notifications.at(-1).message, "Usage: /pet, /pet talk, or /pet status");
+		assert.match(notifications.at(-1).message, /^Usage: \/pet/);
 	});
 	check("temporary prompts hide and restore pet", () => {
 		emit("ui_prompt_start"); assert.equal(overlays[0].hidden, true);
