@@ -17,52 +17,66 @@ function centered(text: string, width: number): string {
 	return fit(" ".repeat(padding) + text, width);
 }
 
-function animationPixels(pet: Pet, animation: AnimationState, frame: number): string[][] {
-	let pixels = pet.pixels.map((row) => [...row]);
-	const shifted = (dx: number, dy: number) => {
-		const next = Array.from({ length: 12 }, () => Array(16).fill("."));
-		for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
-			const nx = x + dx;
-			const ny = y + dy;
-			if (nx >= 0 && nx < 16 && ny >= 0 && ny < 12) next[ny][nx] = pixels[y][x];
-		}
-		pixels = next;
-	};
-	const moveEyesDown = () => {
-		for (let y = 10; y >= 0; y--) for (let x = 0; x < 16; x++) if (pixels[y][x] === "e") {
-			pixels[y][x] = ".";
-			pixels[y + 1][x] = "o";
-		}
-	};
+export const ANIMATIONS: readonly AnimationState[] = ["idle", "blinking", "talking", "sleeping", "celebrating", "sad", "eating", "playing"];
+export const frameDelay = (animation: AnimationState): number => animation === "idle" ? 900 : animation === "sleeping" ? 1200 : 260;
 
-	if (animation === "idle" && frame % 2 === 1) shifted(0, -1);
-	if (animation === "blinking") moveEyesDown();
-	if (animation === "talking") pixels[6][frame % 2 === 0 ? 7 : 8] = frame % 2 === 0 ? "o" : ".";
-	if (animation === "sleeping") {
-		moveEyesDown();
-		shifted(0, frame % 2 === 0 ? 1 : 0);
-		pixels[frame % 2][14] = "a";
+// Exported for visual previews and tests of actual facial geometry.
+export function animationPixels(pet: Pet, animation: AnimationState, frame: number): string[][] {
+	const phase = frame % 2;
+	let pixels = pet.pixels.map((row) => [...row]);
+	const patch = ([x, y]: readonly [number, number], rows: readonly string[]) => {
+		rows.forEach((row, dy) => [...row].forEach((pixel, dx) => { pixels[y + dy][x + dx] = pixel; }));
+	};
+	const happy = animation === "playing" || animation === "celebrating";
+	const closed = animation === "blinking" || animation === "sleeping";
+	pet.face.eyes.forEach((point, index) => {
+		const eye = closed ? ["hh", "ee"] : happy ? (index ? ["eh", "he"] : ["he", "eh"])
+			: animation === "sad" ? (index ? ["ee", "eh"] : ["ee", "he"]) : ["qe", "ee"];
+		patch(point, eye);
+	});
+	let mouth = ["hh", "mm"];
+	if (happy) mouth = ["mm", "pp"];
+	if ((animation === "talking" || animation === "eating") && phase === 1) mouth = ["mm", "mp"];
+	if (animation === "sad") mouth = ["mm", "hh"];
+	patch(pet.face.mouth, mouth);
+	if (phase === 1 && !closed && animation !== "sad") {
+		for (const [x, y, pixel] of pet.motion) pixels[y][x] = pixel;
 	}
-	if (animation === "celebrating") {
-		shifted(0, frame % 2 === 0 ? -1 : 0);
-		pixels[frame % 2][0] = "a";
-		pixels[(frame + 1) % 2][15] = "a";
-	}
-	if (animation === "sad") {
-		moveEyesDown();
-		shifted(frame % 2 === 0 ? 0 : -1, 1);
+	// Move the complete face with the body; the padded silhouettes never clip.
+	const dx = animation === "playing" ? (phase ? 1 : -1) : 0;
+	const dy = animation === "sleeping" || animation === "sad" ? phase
+		: animation === "playing" || animation === "celebrating" || animation === "idle" ? -phase : 0;
+	if (dx || dy) {
+		const moved = Array.from({ length: 12 }, () => Array<string>(16).fill("."));
+		for (let y = 1; y < 11; y++) for (let x = 1; x < 15; x++) moved[y + dy][x + dx] = pixels[y][x];
+		pixels = moved;
 	}
 	if (animation === "eating") {
-		pixels[5 + frame % 2][14] = "a";
-		pixels[7 - frame % 2][15] = frame % 2 === 0 ? "a" : ".";
+		const [x, y] = pet.face.mouth;
+		pixels[y + phase][x + 3] = "a";
+		pixels[y + 1 - phase][x + 4] = "a";
 	}
-	if (animation === "playing") shifted(frame % 2 === 0 ? -1 : 1, frame % 2 === 0 ? -1 : 0);
+	if (animation === "celebrating") {
+		pixels[1 + phase][0] = "a";
+		pixels[2 - phase][15] = "a";
+	}
+	if (animation === "sleeping") {
+		patch([13, 1 + phase], ["aa", ".a", "aa"]);
+	}
 	return pixels;
 }
 
+// At most 8 states x 2 frames per pet. No theme-dependent colours in this cache.
+const spriteCache = new WeakMap<Pet, Map<string, readonly string[]>>();
+
 // Two vertical pixels per cell. Explicit colour resets prevent colour leakage
 // into the editor; no emoji, combining characters, or terminal cursor escapes.
-export function sprite(pet: Pet, animation: AnimationState = "idle", frame = 0): string[] {
+export function sprite(pet: Pet, animation: AnimationState = "idle", frame = 0): readonly string[] {
+	let cache = spriteCache.get(pet);
+	if (!cache) { cache = new Map(); spriteCache.set(pet, cache); }
+	const key = `${animation}:${frame % 2}`;
+	const cached = cache.get(key);
+	if (cached) return cached;
 	const palette = pet.palette as Record<string, number>;
 	const pixels = animationPixels(pet, animation, frame);
 	const colour = (pixel: string): number | undefined => palette[pixel];
@@ -79,6 +93,7 @@ export function sprite(pet: Pet, animation: AnimationState = "idle", frame = 0):
 		}
 		lines.push(line);
 	}
+	cache.set(key, Object.freeze(lines));
 	return lines;
 }
 

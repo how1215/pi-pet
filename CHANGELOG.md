@@ -2,6 +2,25 @@
 
 All notable changes to pi-pet are documented here.
 
+## 1.4.0
+
+### Added
+
+- Queue Rabbit (N), Regex Raccoon (R), Cloud Otter (SR), and Quantum Owl (SSR), each with four dedicated lines and all eight animation states.
+- Species-specific eye/mouth coordinates and ear, tail, wing, or paw movement patches.
+- Separate high-contrast 2x2 eyes and mouths, glints, closed eyelids, happy/sad faces, chewing, and open-mouth talking.
+- Regenerated eight-pet preview and full animation contact sheet; `npm run preview` reproduces both without graphics dependencies.
+- Tests for exact face patches, unclipped geometry, independent species draws, old-save unlock repair, cache reuse, and paused/resumed animation scheduling.
+
+### Changed
+
+- Redrawn all four original silhouettes with safety margins so animated movement does not crop facial features.
+- Draw rarity first (60% / 25% / 12% / 3%), then uniformly select a species in that rarity. Individual chances are 30%, 12.5%, 6%, or 1.5%.
+- Both pets in a rarity unlock at levels 1 / 2 / 3 / 5. Older v2 snapshots gain eligible species once while preserving progression, selected companion, and rare unlocks. State remains `session-pet:v2`; v1 migration is still supported.
+- Replace the 450 ms interval with a single frame timeout: active states 260 ms, idle 900 ms, sleeping 1200 ms. Pause animation redraws while hidden, prompting, or below the terminal size cutoff; resume on host rendering without polling.
+- Cache up to 16 immutable ANSI frames per pet and reuse bubble layout until text, width, or theme changes. Name/state labels continue to follow the current theme.
+- TypeScript checking and 42 automated checks cover the new artwork, progression compatibility, and animation lifecycle.
+
 ## 1.3.0
 
 ### Added

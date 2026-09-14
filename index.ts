@@ -2,11 +2,10 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { drawPet, gainProgress, nextJoke, PETS, restorePet, STATE_TYPE, XP_PER_LEVEL } from "./pets.ts";
 import type { AnimationState, Pet, PetState } from "./pets.ts";
-import { BOTTOM_MARGIN, BUBBLE_WIDTH, canShow, PET_HEIGHT, PET_WIDTH, renderBubble, renderPet } from "./view.ts";
+import { BOTTOM_MARGIN, BUBBLE_WIDTH, canShow, frameDelay, PET_HEIGHT, PET_WIDTH, renderBubble, renderPet } from "./view.ts";
 
 const WIDGET = "session-pet:overlay-owner";
 const SLEEP_DELAY = 60_000;
-const ANIMATION_INTERVAL = 450;
 
 export default function sessionPet(pi: ExtensionAPI) {
 	let tui: TUI | undefined;
@@ -15,7 +14,9 @@ export default function sessionPet(pi: ExtensionAPI) {
 	let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 	let animationTimer: ReturnType<typeof setTimeout> | undefined;
 	let sleepTimer: ReturnType<typeof setTimeout> | undefined;
-	let animationLoop: ReturnType<typeof setInterval> | undefined;
+	let frameTimer: ReturnType<typeof setTimeout> | undefined;
+	let petHidden: boolean | undefined;
+	let bubbleHidden: boolean | undefined;
 	let hidden = false;
 	let prompting = false;
 	let animation: AnimationState = "idle";
@@ -25,10 +26,40 @@ export default function sessionPet(pi: ExtensionAPI) {
 	let activePet: Pet | undefined;
 	let state: PetState | undefined;
 
+	function visible() {
+		return !!tui && !hidden && !prompting && canShow(tui.terminal.columns, tui.terminal.rows);
+	}
+
+	function syncAnimation() {
+		if (!visible() || animation === "blinking") {
+			clearTimeout(frameTimer);
+			frameTimer = undefined;
+			return;
+		}
+		if (frameTimer !== undefined) return;
+		frameTimer = setTimeout(() => {
+			frameTimer = undefined;
+			if (!visible()) return;
+			animationFrame = (animationFrame + 1) % 2;
+			tui?.requestRender();
+			syncAnimation();
+		}, frameDelay(animation));
+	}
+
+	function syncPanels() {
+		if (!tui || !canShow(tui.terminal.columns, tui.terminal.rows)) return;
+		const nextPetHidden = hidden || prompting;
+		const nextBubbleHidden = nextPetHidden || !speech;
+		if (petHidden !== nextPetHidden) petHandle?.setHidden(nextPetHidden);
+		if (bubbleHidden !== nextBubbleHidden) bubbleHandle?.setHidden(nextBubbleHidden);
+		petHidden = nextPetHidden;
+		bubbleHidden = nextBubbleHidden;
+	}
+
 	function updateVisibility() {
-		petHandle?.setHidden(hidden || prompting);
-		bubbleHandle?.setHidden(hidden || prompting || !speech);
-		tui?.requestRender();
+		syncPanels();
+		syncAnimation();
+		if (visible()) tui?.requestRender();
 	}
 
 	function clearActivityTimers() {
@@ -39,8 +70,11 @@ export default function sessionPet(pi: ExtensionAPI) {
 	}
 
 	function setAnimation(next: AnimationState) {
+		clearTimeout(frameTimer);
+		frameTimer = undefined;
 		animation = next;
 		animationFrame = 0;
+		syncAnimation();
 	}
 
 	function scheduleSleep() {
@@ -75,8 +109,9 @@ export default function sessionPet(pi: ExtensionAPI) {
 
 	function cleanup() {
 		clearActivityTimers();
-		clearInterval(animationLoop);
-		animationLoop = undefined;
+		clearTimeout(frameTimer);
+		frameTimer = undefined;
+		petHidden = bubbleHidden = undefined;
 		petHandle?.hide();
 		bubbleHandle?.hide();
 		petHandle = bubbleHandle = undefined;
@@ -112,9 +147,15 @@ export default function sessionPet(pi: ExtensionAPI) {
 				margin: { right: 2, bottom: BOTTOM_MARGIN },
 				visible: canShow,
 			});
+			let bubbleCache: { text: string; width: number; lines: string[] } | undefined;
 			bubbleHandle = renderer.showOverlay({
-				render: (width) => renderBubble(speech, width, theme),
-				invalidate() {},
+				render: (width) => {
+					if (!bubbleCache || bubbleCache.text !== speech || bubbleCache.width !== width) {
+						bubbleCache = { text: speech, width, lines: renderBubble(speech, width, theme) };
+					}
+					return bubbleCache.lines;
+				},
+				invalidate() { bubbleCache = undefined; },
 			}, {
 				nonCapturing: true,
 				anchor: "bottom-right",
@@ -122,13 +163,10 @@ export default function sessionPet(pi: ExtensionAPI) {
 				margin: { right: 2, bottom: BOTTOM_MARGIN + PET_HEIGHT },
 				visible: canShow,
 			});
-			animationLoop = setInterval(() => {
-				animationFrame = (animationFrame + 1) % 2;
-				tui?.requestRender();
-			}, ANIMATION_INTERVAL);
 			updateVisibility();
 			scheduleSleep();
-			return { render: () => [], invalidate() {}, dispose: cleanup };
+			// Host redraws (including resize) resume a paused loop without polling.
+			return { render: () => { syncPanels(); syncAnimation(); return []; }, invalidate() {}, dispose: cleanup };
 		});
 	});
 
@@ -144,7 +182,7 @@ export default function sessionPet(pi: ExtensionAPI) {
 		setAnimation("blinking");
 		animationTimer = setTimeout(() => {
 			setAnimation("talking");
-			tui?.requestRender();
+			if (visible()) tui?.requestRender();
 		}, 180);
 		bubbleTimer = setTimeout(() => {
 			speech = "";

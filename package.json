@@ -1,6 +1,6 @@
 {
   "name": "pi-session-pet",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A session-bound pixel companion for pi, with progression, collections, and multi-frame pixel animations.",
   "type": "module",
   "license": "MIT",
@@ -10,13 +10,14 @@
   "bugs": { "url": "https://github.com/how1215/pi-pet/issues" },
   "keywords": ["pi-package", "pi", "terminal", "pixel-art", "virtual-pet", "typescript"],
   "engines": { "node": ">=22.19.0" },
-  "files": ["index.ts", "pets.ts", "view.ts", "assets/pets.png", "README.md", "CHANGELOG.md", "LICENSE"],
+  "files": ["index.ts", "pets.ts", "artwork.ts", "view.ts", "assets/pets.png", "assets/animations.png", "README.md", "CHANGELOG.md", "LICENSE"],
   "pi": {
     "extensions": ["./index.ts"],
     "image": "https://raw.githubusercontent.com/how1215/pi-pet/main/assets/pets.png"
   },
   "scripts": {
     "test": "node tests/run.mjs",
+    "preview": "node tests/preview.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test"
   },
